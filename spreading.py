@@ -1,0 +1,102 @@
+import numpy as np
+from wave_tools import fft_interface
+from scipy.special import gammaln
+import polarTransform
+    
+
+def mitsuyatsu_spreading(spec1d, theta_mean, smax, wp, k, h=1000, N_theta=360):
+    '''
+    Defines a spectral spreading matrix according to mitsuyatsu
+    
+    Parameters
+    ----------
+    spec1d    : float array
+        one-sided 1d spectrum 
+    theta_mean: float
+        mean direction
+    smax      : float
+        directional spread (degrees)
+    wp        : float
+        peak wave frequency
+    k         : float array
+        one-sided uniform discretization of wave numbers
+        spectrum should be built from a w calculated from this k
+    h          : float
+        water depth; default=1000 deep water
+    N_theta    : int
+        Number of azimuth directions in polar coordinates
+    
+    Return
+    ------
+    spread    : float array (2d)
+        spreading matrix on kartesian grid of
+    
+    Details
+    ------
+    Wind Sea: smax = [10, 30]
+    Swell:    smax = [50, 70]
+    '''
+    mu1 = 5.
+    mu2 = -2.5
+    g = 9.81
+    dk = k[1]-k[0]
+    theta = np.linspace(theta_mean - np.pi, theta_mean + np.pi, N_theta, endpoint=True)
+    theta_mean = theta[np.argmin(np.abs(theta-theta_mean))] # ensure that this value is on the
+    dtheta = theta[1]-theta[0]
+    
+    N = len(k)
+    
+    w = np.sqrt(k*9.81*np.tanh(k*h))
+    w_polar, theta_polar = np.meshgrid(w, theta)
+    k_polar, theta_polar = np.meshgrid(k, theta)
+    spec_polar, theta_polar = np.meshgrid(spec1d, theta)
+    
+    A = g*np.tanh(k_polar*h)
+    B = np.where(np.cosh(k_polar*h)>10**6, k_polar*0, g*h*k_polar*(1./np.cosh(k_polar*h))**2)
+    C = 2*np.sqrt(9.81*k_polar*np.tanh(k_polar*h))
+    print(np.max(k_polar), np.min(k_polar), np.max(C), np.min(C))
+    
+    with np.errstate(divide='ignore', invalid='ignore'):
+        dw_dk = np.where(C>0.001, (A + B)/C, 1)
+    
+                               
+    
+    mu = np.where(w_polar<=wp, mu1, mu2)
+    s = smax*(w_polar/wp)**mu
+    
+    D_polar = ((np.cos((theta_polar-theta_mean)/2) )**2)**s
+    # Scale spreading function to maintain energy
+    D_polar /= np.outer(np.ones(N_theta), np.sum(D_polar, axis=0))
+    S_polar = spec_polar * D_polar * dw_dk
+    
+    
+    S_cart, settings = polarTransform.convertToCartesianImage(S_polar, imageSize=(2*N,2*N), initialAngle=theta[0], finalAngle=theta[-1])
+    
+    return S_cart
+
+if __name__=='__main__':
+    import pylab as plt
+    from wave_tools import jonswap as j
+    theta_mean = np.pi/2
+    smax = 1
+    wp = 0.2
+    N = 256
+    gamma = 3.3
+    wp = 0.8
+    Hs = 3.0
+    h = 100. 
+    g = 9.81
+    k = np.linspace(0, 0.5, N)
+    w = np.sqrt(k*g*np.tanh(k*h))
+
+
+    #Mitsuyasu distribution based on codeine 2s A, normalization (integral should be one)
+
+    ji = j.jonswap(w, wp, Hs, h, gamma) 
+    plt.figure()
+    plt.plot(ji)
+    plt.show()
+    D = mitsuyatsu_spreading(ji, theta_mean, smax, wp, k)
+    plt.figure()
+    plt.imshow(D)
+    plt.show()
