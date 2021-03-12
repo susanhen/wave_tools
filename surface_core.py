@@ -3,6 +3,7 @@ from wave_tools import find_peaks, find_freak_waves, fft_interface, SpectralAnal
 import pylab as plt
 import polarTransform
 from help_tools import plotting_interface
+import h5py
 
 class _Surface1D(object):
     '''
@@ -12,13 +13,13 @@ class _Surface1D(object):
     def __init__(self, eta, grid):
         self.eta = eta
         if type(grid)==list:
-            self.x_grid = grid[0]
+            self.x = grid[0]
         else:
-            self.x_grid=grid
-        self.N = len(self.x_grid)
+            self.x=grid
+        self.N = len(self.x)
         
     def get_r_grid(self):
-        return np.abs(self.x_grid)    
+        return np.abs(self.x)    
     
 
 
@@ -30,10 +31,32 @@ class _Surface2D(object):
     '''
     def __init__(self, eta, grid):
         self.eta = eta
-        self.x_grid = grid[0]
-        self.y_grid = grid[1]
-        self.Nx = len(self.x_grid)
-        self.Ny = len(self.y_grid)
+        self.x = grid[0]
+        self.y = grid[1]
+        self.Nx = len(self.x)
+        self.Ny = len(self.y)
+
+    def save(self, fn, name, window_applied):
+        '''
+        saves a Surface to hdf5 file format
+        '''
+        hf = h5py.File(fn, 'w')
+        hf.create_dataset('eta', data=self.eta)
+        hf.create_dataset('x', data=self.x)
+        hf.create_dataset('y', data=self.y)
+        hf.attrs['window_applied'] = window_applied 
+        hf.attrs['name'] = name
+        hf.close()
+
+    def load(self, fn):
+        hf = h5py.File(fn, 'r')
+        eta = hf.get('eta')
+        x = hf.get('x')
+        y = hf.get('y')
+        name = hf.get('name')
+        window_applied = hf.get('window_applied')
+        grid = [x,y]
+        return Surface(name, eta, grid, window_applied)
         
     def get_surf(self, x_sub, y_sub):
         '''
@@ -50,77 +73,77 @@ class _Surface2D(object):
             x_ind0 = 0
             x_indN = self.Nx
         else:
-            x_ind0 = np.argmin(abs(self.x_grid/x_sub[0]))
-            x_indN = np.argmin(abs(self.x_grid/x_sub[1]))
+            x_ind0 = np.argmin(abs(self.x/x_sub[0]))
+            x_indN = np.argmin(abs(self.x/x_sub[1]))
             if np.logical_or(x_ind0>=self.Nx, x_ind0<0):
-                print('Error: First values of x_sub is outide x_grid.')
+                print('Error: First values of x_sub is outide x.')
                 return None
             if np.logical_or(x_indN>=self.Nx, x_indN<0):
-                print('Error: Last values of x_sub is outide x_grid.')
+                print('Error: Last values of x_sub is outide x.')
                 return None
         if y_sub==None:
             y_ind0 = 0
             y_indN = self.Ny
         else:
-            y_ind0 = np.argmin(abs(self.y_grid/y_sub[0]))
-            y_indN = np.argmin(abs(self.y_grid/y_sub[1]))
+            y_ind0 = np.argmin(abs(self.y/y_sub[0]))
+            y_indN = np.argmin(abs(self.y/y_sub[1]))
             if np.logical_or(y_ind0>=self.Ny, y_ind0<0):
-                print('Error: First values of y_sub is outide y_grid.')
+                print('Error: First values of y_sub is outide y.')
                 return None
             if np.logical_or(y_indN>=self.Ny, y_indN<0):
-                print('Error: Last values of y_sub is outide y_grid.')
+                print('Error: Last values of y_sub is outide y.')
                 return None
-        return self.x_grid[x_ind0:x_indN], self.y_grid[y_ind0:y_indN], (self.eta.copy())[x_ind0:x_indN, y_ind0:y_indN]
+        return self.x[x_ind0:x_indN], self.y[y_ind0:y_indN], (self.eta.copy())[x_ind0:x_indN, y_ind0:y_indN]
         
         
     def eta_at_xi(self, xi, y_sub=None):
         '''
         return subset of eta for given xi value.
         nearest point in grid is chosen for evaluation
-        returns two arrays, y_grid and eta(xi)
+        returns two arrays, y and eta(xi)
         '''
         if y_sub==None:
             y_sub = [0, self.Ny]
-        y_sub_ind = np.where(np.logical_and(self.y_grid>y_sub[0], abs(self.y_grid)<y_sub[1]))#[0]
+        y_sub_ind = np.where(np.logical_and(self.y>y_sub[0], abs(self.y)<y_sub[1]))#[0]
         if len(y_sub_ind)<=0:
             print('y_sub does not define subspace on the y-axis')
             return None
         else:
             y_sub_ind = y_sub_ind[0]
-        x_ind = np.argmin(abs(self.x_grid/xi-1))
+        x_ind = np.argmin(abs(self.x/xi-1))
         if np.logical_or(x_ind<self.Nx, x_ind>=0):
-            return self.y_grid[y_sub_ind], self.eta[x_ind,y_sub_ind]
+            return self.y[y_sub_ind], self.eta[x_ind,y_sub_ind]
         else:
-            print('Error: Chosen value of xi was outside of x_grid')
+            print('Error: Chosen value of xi was outside of x')
             return None
         
     def eta_at_yi(self, yi, x_sub=None):
         '''
         return subset of eta for given xi value.
         nearest point in grid is chosen for evaluation
-        returns two arrays, x_grid and eta(xi)
+        returns two arrays, x and eta(xi)
         '''
         if x_sub==None:
             x_sub = [0, self.Nx]
-        x_sub_ind = np.where(np.logical_and(self.x_grid>x_sub[0], abs(self.x_grid)<x_sub[1]))#[0]
+        x_sub_ind = np.where(np.logical_and(self.x>x_sub[0], abs(self.x)<x_sub[1]))#[0]
         if len(x_sub_ind)<=0:
             print('x_sub does not define subspace on the x-axis')
             return None
         else:
             x_sub_ind = x_sub_ind[0]     
-        y_ind = np.argmin(abs(self.x_grid/yi-1))
+        y_ind = np.argmin(abs(self.x/yi-1))
         if np.logical_or(y_ind<self.Ny, y_ind>=0):
-            return self.x_grid[x_sub_ind], self.eta[x_sub_ind,y_ind]
+            return self.x[x_sub_ind], self.eta[x_sub_ind,y_ind]
         else:
-            print('Error: Chosen value of yi was outside of y_grid')
+            print('Error: Chosen value of yi was outside of y')
             return None
         
     def get_r_grid(self):        
-        x_mesh, y_mesh = np.meshgrid(self.x_grid, self.y_grid, indexing='ij')
+        x_mesh, y_mesh = np.meshgrid(self.x, self.y, indexing='ij')
         return np.sqrt(x_mesh**2 + y_mesh**2)
         
     def get_deta_dx(self, cut_off_kx=None):
-        kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x_grid, self.y_grid])
+        kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x, self.y])
         #TODO: this depends on the indexing can you make a check when initializing the surface?
         kx_cut = np.where(np.abs(kx)<cut_off_kx, kx, 0)
         kx_mesh = np.outer(kx_cut, np.ones(len(ky)))
@@ -130,7 +153,7 @@ class _Surface2D(object):
         return deta_dx    
           
     def get_deta_dy(self, cut_off_ky=None):
-        kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x_grid, self.y_grid])
+        kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x, self.y])
         #TODO: this depends on the indexing can you make a check when initializing the surface?
         ky_cut = np.where(np.abs(ky)<cut_off_ky, ky, 0)
         if cut_off_ky==None:
@@ -143,7 +166,7 @@ class _Surface2D(object):
         return deta_dy  
     
     def plot_3d_surface(self):
-        plotting_interface.plot_3d_surface(self.x_grid, self.y_grid, self.eta)
+        plotting_interface.plot_3d_surface(self.x, self.y, self.eta)
             
     def fft_interpolate(self, inter_factor_x, inter_factor_y):
         '''
@@ -160,13 +183,13 @@ class _Surface2D(object):
                 surface_inter       object
                                     instance of Surface class with interpolated eta and grid
         ''' 
-        x_inter, y_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x_grid, self.y_grid, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
+        x_inter, y_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x, self.y, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
         return Surface('noName_inter', eta_inter, [x_inter, y_inter]) 
         
     def get_shadowing_mask(self, name, H):
         # TODO: differentiate between kx-ky and k,w
         # create polar image
-        x_mesh, y_mesh = np.meshgrid(self.x_grid, self.y_grid, indexing='ij')
+        x_mesh, y_mesh = np.meshgrid(self.x, self.y, indexing='ij')
         r_mesh = np.sqrt(x_mesh**2 + y_mesh**2)
         theta_mesh = np.arctan2(y_mesh, x_mesh)
         print(r_mesh, theta_mesh)
@@ -184,10 +207,10 @@ class _Surface2D(object):
         
         '''
         if axis==0:
-            r = np.outer(self.x_grid, np.ones(self.Ny))  
+            r = np.outer(self.x, np.ones(self.Ny))  
             radar_point_angle = np.arctan2(r, (H - self.eta))
         else:
-            r = np.outer(self.y_grid, np.ones(self.Nx))    
+            r = np.outer(self.y, np.ones(self.Nx))    
             radar_point_angle = np.arctan2(r, (H - self.eta.transpose()))
         illumination = np.ones(r.shape)
         for i in range(0,illumination.shape[axis]-1): 
@@ -213,14 +236,14 @@ class _Surface2D(object):
         plt.figure()
         plt.imshow(illu_cart)
         plt.show()
-        return Surface(name, illumination, [self.x_grid, self.y_grid])
+        return Surface(name, illumination, [self.x, self.y])
             
     def get_illuminated_surface(self, name, H, axis=0):
         if axis==0:
-            r = np.outer(self.x_grid, np.ones(self.Ny))  
+            r = np.outer(self.x, np.ones(self.Ny))  
             radar_point_angle = np.arctan2(r, (H - self.eta))
         else:
-            r = np.outer(self.y_grid, np.ones(self.Nx))    
+            r = np.outer(self.y, np.ones(self.Nx))    
             radar_point_angle = np.arctan2(r, (H - self.eta.transpose()))
         illumination = np.ones(r.shape)
         for i in range(0,illumination.shape[axis]-1): 
@@ -228,7 +251,7 @@ class _Surface2D(object):
         if axis==1:
             illumination = illumination.transpose()
 
-        return Surface(name, illumination*self.eta.copy(), [self.x_grid, self.y_grid])
+        return Surface(name, illumination*self.eta.copy(), [self.x, self.y])
 
             
 
@@ -247,17 +270,17 @@ class Surface(object):
         if len(eta.shape)==1:
             self.ND = 1
             self.etaND = _Surface1D(eta, grid)
-            self.x = self.etaND.x_grid
+            self.x = self.etaND.x
         elif len(eta.shape)==2:
             self.ND = 2        
             self.etaND = _Surface2D(eta, grid)
-            self.x = self.etaND.x_grid
-            self.y = self.etaND.y_grid
+            self.x = self.etaND.x
+            self.y = self.etaND.y
         elif len(eta.shape)==3:
             self.ND = 3        
             self.etaND = _Surface3D(eta, grid)
-            self.x = self.etaND.x_grid
-            self.y = self.etaND.y_grid
+            self.x = self.etaND.x
+            self.y = self.etaND.y
             self.z = self.etaND.z
         else:
             print('\n\nError: Input data spectrum is not of the correct type\n\n')
@@ -471,6 +494,9 @@ class Surface(object):
             x, y, z, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)                   
             k_grid = [x,y,z]
         return SpectralAnalysis.SpectralAnalysis(coeffs, abs(coeffs)**2, k_grid, self.window_applied, grid_cut_off)
+
+    def save(self, fn):
+        self.etaND.save(fn, self.name, self.window_applied)
         
         
         

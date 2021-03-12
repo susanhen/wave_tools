@@ -8,6 +8,7 @@ from scipy.integrate import dblquad, quad, simps
 from scipy import integrate
 from matplotlib import cm
 import cmath
+from help_tools import plotting_interface
 
 class Pol2Cart:
     
@@ -113,7 +114,7 @@ class DirectionalSpectrum:
         self.gam = gam
         g = 9.81        
         U = lambda UU: 3.5*(g/UU)*(g/UU**2*F)**(-0.33)-fp
-        self.U10 = fsolve(U, [10],  xtol=1e-04)
+        self.U10 = fsolve(U, 10,  xtol=1e-04)[0]
         self.xxn = g/self.U10**2*F
         self.S = lambda f:(0.076*self.xxn**(-0.22)*g**2/(2*np.pi)**4*(f)**(-5)*np.exp(-5/4*(self.fp/f)**4)
          *gam**np.exp(-((f-self.fp)**2)/(2*(fp*(0.07*(1/2 + 1/2*np.sign(self.fp - f))
@@ -162,8 +163,9 @@ class DirectionalSpectrum:
         s1 = 5
         s2 = 0.1
         f = np.random.gamma(s1, s2, size=N_f)/(s1*s2*self.Tp)
-        f = np.sort(f)
+        
         '''
+        f = np.sort(f)
         if plot_it:
             plt.figure()
             plt.plot(f, self.S(f), 'x')
@@ -203,12 +205,12 @@ class DirectionalSpectrum:
     
     def define_realization(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=True):
         f_r, Theta_r = self.seed_f_theta(f_min, f_max, theta_min, theta_max, N_f, N_theta)
-        print('theta seeded')
-        Q = quad(self.S, f_min, f_max)[0]
-        print('Q = ', Q)
+        #print('theta seeded')
+        #Q = quad(self.S, f_min, f_max)[0]
+        #print('Q = ', Q)
         
         #print('test = ', integrate.nquad(self.D, [[f_min, f_max],[0, 2*np.pi]]))
-        Hs = 4*np.sqrt(Q)
+        #Hs = 4*np.sqrt(Q)
         a = np.zeros((N_f, N_theta))
         '''
         for i in range(1, N_f-1):
@@ -285,7 +287,7 @@ class SpectralRealization:
         k = self.calc_wavenumber(Nx, Ny, bathy)
         print('wavenumber calculated')
         w = 2*np.pi*self.f_r
-        if bathy!=None:
+        if not bathy is  None:
             H = bathy.H
         else:
             H = h
@@ -309,12 +311,15 @@ class SpectralRealization:
                 phase = np.random.uniform()*np.pi*2
                 zeta += self.a[i,j]* np.abs(Cg0x_sqrt/Cgx_sqrt)*np.cos(phase-k[i,:,:]*np.sin(theta[i,j])*Y
                 +np.outer(ksh, np.ones(Ny)))
+        plotting_interface.plot_3d_as_2d(y, x, zeta.T)
+        '''        
         fig = plt.figure(figsize=(14,8))
         ax = fig.gca(projection='3d')
         surf = ax.plot_surface(X, Y, zeta, cmap=cm.coolwarm, linewidth=0, antialiased=True)
         #fig.colorbar(surf, shrink=0.5, aspect=5)
         #plt.imshow(zeta)
         #plt.colorbar()
+        '''
         #'''
         plt.figure()
         plt.plot(zeta[:,400])
@@ -323,7 +328,7 @@ class SpectralRealization:
         #'''            
                 
 
-
+    
 
 if __name__=='__main__':
 
@@ -365,7 +370,7 @@ if __name__=='__main__':
     print('y_pol = ', y_pol)
     print(test.transform(x_pol))
     '''
-    realization.invert(b, 0, x, y)
+    realization.invert(None, 0, x, y)
     
     
     
