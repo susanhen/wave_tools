@@ -1,6 +1,6 @@
 import numpy as np
 from wave_tools import moving_average, surface_core, fft_interface
-#from PythonCode import SpectralPlotting
+from help_tools import plotting_interface
 from radar_tools import dispersion_filter, filter_core
 
 def _symmetrize2d(surf):
@@ -31,6 +31,7 @@ class _SpectralAnalysis1d(object):
             self.x_grid = x_grid
         self.SAx = self
         self.dx = abs(self.x_grid[1]-self.x_grid[0])
+        self.Nx = len(self.x_grid)
         
     def get_S(self, mov_av=1):
         '''
@@ -82,7 +83,7 @@ class _SpectralAnalysis1d(object):
         elif moment==1:
             Tc = 2*np.pi*(m0/m1)
         elif moment==2:
-            Tc = 2*np.pi*sqrt(m0/m2)
+            Tc = 2*np.pi*np.sqrt(m0/m2)
         else:
             print('Error: given moment was not defined')
         return Tc
@@ -94,7 +95,11 @@ class _SpectralAnalysis1d(object):
         fn          filename for saving plot, also used as title
         extent      tupel of limits (x_lower, x_upper), y_lower, y_upper) #FIXME CHECK if None option is implemented        
         '''
-        SpectralAnalysis.plot_1D_spec(self.spectrum, self.x_grid, fn, x_label, y_label='', save=save, fn=fn)   # FIXME always plot scaled spectra!!! # FIXME apply extent
+        plotting_interface.plot_1D_spec(self.spectrum, self.x_grid, fn, x_label, y_label='', save=save, fn=fn)   # FIXME always plot scaled spectra!!! # FIXME apply extent
+
+    def remove_zeroth(self):
+        self.coeffs[self.Nx//2] = 0
+        self.spectrum[self.Nx//2] = 0
         
 class _SpectralAnalysis2d(object):
     def __init__(self, coeffs, spectrum, xy_grid, grid_cut_off=None):
@@ -127,7 +132,7 @@ class _SpectralAnalysis2d(object):
         '''
         return self.x_grid, self.y_grid, self.coeffs.copy()  
         
-    def plot(self, fn, waterdepth, extent, U, dB=True, vmin=-60, save=False):
+    def plot(self):#, fn, waterdepth, extent, U, dB=True, vmin=-60, save=False):
         '''
         Parameters:
         -----------
@@ -135,7 +140,7 @@ class _SpectralAnalysis2d(object):
         waterdepth  used when defining dispersion relation. If unkonw maybe set to high value #FIXME do this internally and option to set NONE or is there?
         extent      tupel of limits (x_lower, x_upper, y_lower, y_upper) #FIXME CHECK if None option is implemented        
         '''
-        SpectralPlotting.plot_k_w_mod2D(self.x_grid, self.y_grid, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)  
+        plotting_interface.plot_kx_ky_spec(self.x_grid, self.y_grid, self.spectrum)  #.plot_k_w_mod2D(self.x_grid, self.y_grid, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)  
         
     def get_disp_filtered_spec(self, U, h, filter_width_up, filter_width_down, filter_width_axis, first_axis_k):
         if first_axis_k==True:
@@ -195,10 +200,24 @@ class _SpectralAnalysis2d(object):
         F_sin_theta *= np.sqrt(self.dx*self.dy)
         Nx = len(kx)
         Ny = len(ky)
-        MTF = F_cos_theta[Nx//2, Ny//2]*1.0j*kx_mesh + F_sin_theta[Nx//2, Ny//2]*1.0j*ky_mesh
-        return MTF   
+        MTF_inv = -1.0j*(F_cos_theta[Nx//2, Ny//2]*kx_mesh + F_sin_theta[Nx//2, Ny//2]*ky_mesh)
+        MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+        return MTF  
+
+    def apply_MTF(self, grid_offset, percentage_of_max=0.01):
+        MTF = self.get_2d_MTF(grid_offset)
+        '''
+        from help_tools import plotting_interface
+        import pylab as plt
+        plotting_interface.plot_3d_as_2d(self.x_grid, self.y_grid, MTF.real)
+        plotting_interface.plot_3d_as_2d(self.x_grid, self.y_grid, MTF.imag)
+        plt.show()
+        '''
+        threshold = percentage_of_max * np.max(np.abs(self.coeffs))
+        self.coeffs = np.where(np.abs(self.coeffs)>threshold, self.coeffs* MTF, 0)
+        self.spectrum = np.abs(self.coeffs)**2
             
-    def invert(self, name, grid_offset):
+    def invert(self, name, grid_offset, window_applied):
         #FIXME: right now symmetry is ensured but this should work anyway!? Or is my filter not symmetric? CHECK not yet correct!!!
         data = self.coeffs.copy()
         #Nx, Ny = data.shape
@@ -209,7 +228,11 @@ class _SpectralAnalysis2d(object):
         x, y, eta_invers = fft_interface.spectral2physical(data, [self.x_grid, self.y_grid])
         x += grid_offset[0]
         y += grid_offset[1]
-        return surface_core.Surface(name, eta_invers, [x,y])
+        return surface_core.Surface(name, eta_invers, [x,y], window_applied)
+    
+    def remove_zeroth(self):
+        self.coeffs[self.Nx//2, self.Ny//2] = 0
+        self.spectrum[self.Nx//2, self.Ny//2] = 0
         
 class _SpectralAnalysis3d(object):
     def __init__(self, coeffs, spectrum, xy_grid, grid_cut_off=None):
@@ -232,14 +255,18 @@ class _SpectralAnalysis3d(object):
         '''
         Return the 2d complex coefficients with the corresponding grid
         '''
-        return self.x_grid, self.y_grid, self.z_grid, self.coeffs.copy()           
-        
+        return self.x_grid, self.y_grid, self.z_grid, self.coeffs.copy()   
+
     def plot(self,fn, waterdepth, extent, U, dB, vmin, save):
         '''
         ...
         '''
         #FIXME implement: options of 3d something and slices along different axis, single slices or a bunch, use subspectra in 2D!
         print('Not implemented yet')
+
+    def remove_zeroth(self):
+        self.coeffs[self.Nx//2, self.Ny//2, self.Ny//2] = 0
+        self.spectrum[self.Nx//2, self.Ny//2, self.Ny//2] = 0
         
         
 
@@ -247,7 +274,7 @@ class SpectralAnalysis(object):
     '''
     Class for Analysis 1d, 2d and 3d spectra over a uniform grid.    
     '''
-    def __init__(self, coeffs, spectrum, axes_grid, grid_cut_off=None):
+    def __init__(self, coeffs, spectrum, axes_grid, window_applied=False, grid_cut_off=None):
         '''
         Parameters:
         ----------
@@ -258,15 +285,24 @@ class SpectralAnalysis(object):
                                 spectrum in 1d, 2d, 3d
                 axis_grid       list of arrays defining grid for each given axis
         '''
+        self.axes_grid = axes_grid
+        self.grid_cut_off = grid_cut_off
+        self.window_applied = window_applied
         if len(spectrum.shape)==1:
             self.ND = 1
             self.spectrumND = _SpectralAnalysis1d(coeffs, spectrum, axes_grid, grid_cut_off)
+            self.kx = self.spectrumND.x_grid
         elif len(spectrum.shape)==2:
             self.ND = 2        
             self.spectrumND = _SpectralAnalysis2d(coeffs, spectrum, axes_grid, grid_cut_off)
+            # TODO: distinguish different 2d spectra?
+            self.kx = self.spectrumND.x_grid
+            self.ky = self.spectrumND.y_grid
         elif len(spectrum.shape)==3:
             self.ND = 3        
             self.spectrumND = _SpectralAnalysis3d(coeffs, spectrum, axes_grid, grid_cut_off)
+            self.kx = self.spectrumND.x_grid
+            self.ky = self.spectrumND.y_grid
         else:
             print('\n\nError: Input data spectrum is not of the correct type\n\n')
         
@@ -282,6 +318,12 @@ class SpectralAnalysis(object):
         '''
         return self.spectrumND.get_C()        
 
+
+    def spectrum(self):
+        return self.spectrumND.spectrum
+
+    def coeffs(self):
+        return self.spectrumND.coeffs    
         
     def get_S_integrated(self, axis, one_sided=True):
         '''
@@ -316,7 +358,12 @@ class SpectralAnalysis(object):
         else:
             print('\n\n Error: Your spectrum has more than one dimensions. Method works only in 1D. Use get S_integrated instead!')
             return 0                  
-               
+        
+    def copy(self):
+        if self.grid_cut_off==None:
+            return SpectralAnalysis(self.spectrumND.coeffs.copy(), self.spectrumND.spectrum.copy(), self.axes_grid.copy(), self.window_applied, grid_cut_off=None)
+        else:
+            return SpectralAnalysis(self.spectrumND.coeffs.copy(), self.spectrumND.spectrum.copy(), self.axes_grid.copy(), self.window_applied, grid_cut_off=self.grid_cut_off.copy())
  
     def get_peak(self):
         '''
@@ -336,7 +383,7 @@ class SpectralAnalysis(object):
         Returns grid values of the peak point
         '''
         peak_indices = self.get_peak_index()
-        grip_points = zeros(self.ND)
+        grid_points = np.zeros(self.ND)
         for i in range(0, self.ND):
             grid_points[i] = (self.get_S()[i])[peak_indices[i]]
         return grid_points
@@ -356,17 +403,17 @@ class SpectralAnalysis(object):
             print('wrong axis input for given specturm!')
             return 0  
             
-    def plot(self, fn, waterdepth=None, extent=None, U=None, dB=True, vmin=-60, save=False):
+    def plot(self):#, fn, waterdepth=None, extent=None, U=None, dB=True, vmin=-60, save=False):
         '''
-        
+        TODO: recheck all arguments sensible to include
         '''
         #FIXME description!
         if self.ND==1:
-            self.spectrumND.plot(fn, extent, save)
+            self.spectrumND.plot()#fn, extent, save)
         elif self.ND==2:
-            self.spectrumND.plot(fn, waterdepth, extent, U, dB, vmin, save)
+            self.spectrumND.plot()#fn, waterdepth, extent, U, dB, vmin, save)
         elif self.ND==3:
-            self.spectrumND.plot(fn, waterdepth, extent, U, dB, vmin, save)  
+            self.spectrumND.plot()#fn, waterdepth, extent, U, dB, vmin, save)  
             
     def get_disp_filtered_spec(self, U, h, filter_width_up=1, filter_width_down=1, filter_width_axis=0, first_axis_k=True):
         '''
@@ -383,12 +430,16 @@ class SpectralAnalysis(object):
         return self.spectrumND.get_disp_filtered_spec(U, h, filter_width_up, filter_width_down, filter_width_axis, first_axis_k)
     
     def apply_HP_filter(self, limits):
-        self.spectrumND.apply_HP_filter(limits)
-        
+        self.spectrumND.apply_HP_filter(limits)   
+
+    def remove_zeroth(self):
+        self.spectrumND.remove_zeroth()
         
     def get_2d_MTF(self, grid_offset):
         if self.ND==2:
-            return self.spectrumND.get_2d_MTF(grid_offset)    
+            return self.spectrumND.get_2d_MTF(grid_offset)  
+    def apply_MTF(self, grid_offset):
+        self.spectrumND.apply_MTF(grid_offset)
         
     def invert(self, name, grid_offset=None):
         '''
@@ -401,10 +452,10 @@ class SpectralAnalysis(object):
                     offset      list of ND floats
                                 default None (no offset)
         '''
-        if grid_offset==None:
-            return self.spectrumND.invert(name, np.zeros(self.ND))        
+        if grid_offset is None:
+            return self.spectrumND.invert(name, np.zeros(self.ND), self.window_applied)        
         else:
-            return self.spectrumND.invert(name, grid_offset)        
+            return self.spectrumND.invert(name, grid_offset, self.window_applied)        
         
         
         

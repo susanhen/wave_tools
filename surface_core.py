@@ -237,22 +237,34 @@ class Surface(object):
     Class to represent wave surfaces, will invoke specific
     classes of appropriate dimension
     '''
-    def __init__(self, name, eta, grid):
+    def __init__(self, name, eta, grid, window_applied=False):
         '''
         
         '''
-        self.name = name        
+        self.name = name  
+        self.window_applied = window_applied 
+        self.grid=grid  
         if len(eta.shape)==1:
             self.ND = 1
             self.etaND = _Surface1D(eta, grid)
+            self.x = self.etaND.x_grid
         elif len(eta.shape)==2:
             self.ND = 2        
             self.etaND = _Surface2D(eta, grid)
+            self.x = self.etaND.x_grid
+            self.y = self.etaND.y_grid
         elif len(eta.shape)==3:
             self.ND = 3        
             self.etaND = _Surface3D(eta, grid)
+            self.x = self.etaND.x_grid
+            self.y = self.etaND.y_grid
+            self.z = self.etaND.z
         else:
             print('\n\nError: Input data spectrum is not of the correct type\n\n')
+        self.eta = self.etaND.eta
+
+    def copy(self, name):
+        return Surface(name, self.etaND.eta, self.grid, self.window_applied)        
             
     def get_name(self):
         return self.name
@@ -297,7 +309,20 @@ class Surface(object):
             self.etaND.plot_3d_surface()
         elif self.ND==3:
             self.etaND.plot_3d_surface()
-            
+
+    def apply_window(self, window):
+        if self.window_applied==True:
+            print('\nWarning: a window has already been applied, the window is not applied!')
+        else:
+            self.etaND.eta *= window
+            self.window_applied = True
+
+    def remove_window(self, window):
+        if self.window_applied==False:
+            print('Warning: no window has been applied, no window can be removed!')
+        else:
+            self.etaND.eta /= window
+            self.window_applied = False
         
     def fft_interpolate(self, inter_factor_x, inter_factor_y=None, inter_factor_z=None):
         '''
@@ -365,29 +390,26 @@ class Surface(object):
                         False(default): the local incidence angle is calculated exactly
         '''
         #TODO make all functions available in all dimensions and return 0 if suitable
-        
-        eta = self.etaND.eta
-        x = self.etaND.x_grid
-        y = self.etaND.y_grid
+
         if k_cut_off == None:
-            deta_dx = self.get_deta_dx()
-            deta_dy = self.get_deta_dy()
+            deta_dx = self.get_deta_dx(0)
+            deta_dy = self.get_deta_dy(0)
         else:
             deta_dx = self.get_deta_dx(k_cut_off[0])
             deta_dy = self.get_deta_dy(k_cut_off[1])
         r = self.get_r_grid()
-        x_mesh, y_mesh = np.meshgrid(x,y, indexing='ij')
+        x_mesh, y_mesh = np.meshgrid(self.x, self.y, indexing='ij')
         if approx:
             n_norm = 1
             b_norm = r
             cos_theta_l = (x_mesh*deta_dx + y_mesh*deta_dy )/(n_norm*b_norm)
         else:
             n_norm = np.sqrt(deta_dx**2 + deta_dy**2 + 1)
-            b_norm = np.sqrt(r**2 + (H-eta)**2)
-            cos_theta_l = (x_mesh*deta_dx + y_mesh*deta_dy + (H-eta))/(n_norm*b_norm)
+            b_norm = np.sqrt(r**2 + (H-self.eta)**2)
+            cos_theta_l = (x_mesh*deta_dx + y_mesh*deta_dy + (H-self.eta))/(n_norm*b_norm)
         theta_l = np.arccos(cos_theta_l)
-        grid = [self.etaND.x_grid, self.etaND.y_grid]
-        return Surface('loc_incidence({0:s})'.format(self.name), theta_l, grid)
+        grid = [self.x, self.y]
+        return Surface('loc_incidence({0:s})'.format(self.name), theta_l, grid, self.window_applied)
         
     def get_shadowing_mask(self, name, H):
         '''
@@ -437,18 +459,18 @@ class Surface(object):
         Create object in spectral domain that corresponds to the given surface and the given grid      
         '''
         if self.ND==1:
-            grid = [self.etaND.x_grid]
+            grid = [self.x]
             x, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)  
             k_grid = [x]            
         elif self.ND==2:
-            grid = [self.etaND.x_grid, self.etaND.y_grid]
+            grid = [self.x, self.y]
             x, y, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)            
             k_grid = [x,y]            
         elif self.ND==3:
-            grid = [self.etaND.x_grid, self.etaND.y_grid, self.etaND.z_grid]   
+            grid = [self.x, self.y, self.z]   
             x, y, z, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)                   
             k_grid = [x,y,z]
-        return SpectralAnalysis.SpectralAnalysis(coeffs, abs(coeffs)**2, k_grid, grid_cut_off)
+        return SpectralAnalysis.SpectralAnalysis(coeffs, abs(coeffs)**2, k_grid, self.window_applied, grid_cut_off)
         
         
         
