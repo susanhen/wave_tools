@@ -261,7 +261,7 @@ class SpectralRealization:
             plt.plot(k_loc, self.f_r[:,0])
         return k_loc
                 
-    def invert(self, t, x, y, h, surf_name='inverted_surface', save_data=False, fn='Data/SimulatedWaves/inv_surf.hdf5'):
+    def invert(self, t, x, y, h, surf_name='inverted_surface'):
 
         Nx = len(x)
         Ny = len(y)
@@ -288,9 +288,8 @@ class SpectralRealization:
         plt.plot(eta[400,:])
         #'''  
         surf = surface_core.Surface(surf_name, eta, [x,y])
-        if save_data:
-            surf.save(fn)
         return surf
+
 
 
 if __name__=='__main__':
@@ -339,6 +338,7 @@ if __name__=='__main__':
     realization = SpectralRealization(DirSpec, f_min, f_max, theta_min, theta_max, N_f, N_theta)
     print('Directional Spectrum defined')
 
-    realization.invert(0, x, y, h, save_data=True)
+    inverted_surface = realization.invert(0, x, y, h)
+    inverted_surface.save('../../Data/SimulatedWaves/inv_surf.hdf5')
     
     plt.show()

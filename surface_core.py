@@ -17,6 +17,7 @@ class _Surface1D(object):
         else:
             self.x=grid
         self.N = len(self.x)
+        self.dx = self.x[1]-self.x[0]
         
     def get_r_grid(self):
         return np.abs(self.x)    
@@ -35,6 +36,8 @@ class _Surface2D(object):
         self.y = grid[1]
         self.Nx = len(self.x)
         self.Ny = len(self.y)
+        self.dx = self.x[1]-self.x[0]
+        self.dy = self.y[1]-self.y[0]
 
     def save(self, fn, name, window_applied):
         '''
@@ -46,17 +49,8 @@ class _Surface2D(object):
         hf.create_dataset('y', data=self.y)
         hf.attrs['window_applied'] = window_applied 
         hf.attrs['name'] = name
+        hf.attrs['ND'] = 2
         hf.close()
-
-    def load(self, fn):
-        hf = h5py.File(fn, 'r')
-        eta = hf.get('eta')
-        x = hf.get('x')
-        y = hf.get('y')
-        name = hf.get('name')
-        window_applied = hf.get('window_applied')
-        grid = [x,y]
-        return Surface(name, eta, grid, window_applied)
         
     def get_surf(self, x_sub, y_sub):
         '''
@@ -186,24 +180,55 @@ class _Surface2D(object):
         x_inter, y_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x, self.y, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
         return Surface('noName_inter', eta_inter, [x_inter, y_inter]) 
         
-    def get_shadowing_mask(self, name, H):
+    def get_geometric_shadowing(self, name, H):
         # TODO: differentiate between kx-ky and k,w
         # create polar image
-        x_mesh, y_mesh = np.meshgrid(self.x, self.y, indexing='ij')
+        # improve check for x grid and y grid!
+        if self.x[0]<=0:
+            x_all = self.x
+        else:
+            x_all = np.arange(0, self.x[-1]+self.dx, self.dx)
+        if self.y[0]<=0:
+            y_all = self.y
+        else:
+            y_all = np.arange(0, self.y[-1]+self.dy, self.dy)
+        x_mesh, y_mesh = np.meshgrid(x_all, y_all, indexing='ij')
         r_mesh = np.sqrt(x_mesh**2 + y_mesh**2)
         theta_mesh = np.arctan2(y_mesh, x_mesh)
-        print(r_mesh, theta_mesh)
-        eta_pol, settings = polarTransform.convertToPolarImage(self.eta.swapaxes(0,1),  initialRadius=0, center=[32,0], initialAngle=0,
-                                                            finalAngle=np.pi, radiusSize=128)
+        Nx_all, Ny_all = x_mesh.shape
+        eta_all = np.zeros(x_mesh.shape)
+        eta_all[Nx_all-self.Nx:,Ny_all-self.Ny:] = self.eta
+        x_center_ind = np.argmin(np.abs(x_all))
+        y_center_ind = np.argmin(np.abs(y_all))
+        
+        radiusSize = self.Nx + self.Ny
+        initAngle = np.min(theta_mesh)
+        finAngle = np.max(theta_mesh)
+        
+        
+
+
+        eta_pol, settings = polarTransform.convertToPolarImage(eta_all.swapaxes(0,1),  initialRadius=0, center=[x_center_ind,y_center_ind], initialAngle=initAngle,
+                                                            finalAngle=finAngle, radiusSize=radiusSize)
+        eta_pol = eta_pol.swapaxes(0,1)
         print(settings)
         #(self.eta, imageSize=(2*N,2*N), initialAngle=theta[0], finalAngle=theta[-1])
         # calculate shadowing for each angle
         #'''
+        Nr, Ntheta = eta_pol.shape
+        theta0 = settings.initialAngle
+        thetaN = settings.finalAngle
+        r0 = settings.initialRadius
+        rN = settings.finalRadius
+        r = np.linspace(r0, rN, Nr, endpoint=True)
+        theta = np.linspace(theta0, thetaN, Ntheta, endpoint=True)
+        plotting_interface.plot_3d_as_2d(r, theta*180/np.pi, eta_pol)
+        '''
         import pylab as plt
         plt.figure()
-        plt.imshow(eta_pol)
-        #plt.show()
-        #'''
+        plt.imshow(eta_pol.T)
+        plt.show()
+        '''
         
         '''
         if axis==0:
@@ -219,18 +244,31 @@ class _Surface2D(object):
             illumination = illumination.transpose()
         '''
         
+
+        r_pol, theta_pol = np.meshgrid(r, theta, indexing='ij')#NOTE: ??? changed? opposite indexing to match with polarTransform
+        radar_point_angle = np.arctan2(r_pol, (H - eta_pol))
+        plt.figure()
+        plt.plot(np.gradient((r_pol/(H - eta_pol))[:,200])*180/.np.pi)
+        plt.show()
+        illumination = np.ones(eta_pol.shape)
+        for i in range(0, Nr-1):
+            illumination[i+1:, :] *= (radar_point_angle[i, :] - radar_point_angle[i+1, :])*180/np.pi < 0.02
         
-        N_theta, Nr = eta_pol.shape
-        r = np.linspace(0, np.max(r_mesh), Nr)
-        theta = np.linspace(0, np.pi, N_theta)
-        r_pol, theta_pol = np.meshgrid(r, theta, indexing='xy')#NOTE: opposite indexing to match with polarTransform
-        radar_point_angle = np.arctan2(r_pol, (H - eta_pol)).T
-        illumination = np.ones(eta_pol.shape).T
-        for i in range(0, Nr):
-            illumination[i+1:, :] *= radar_point_angle[i, :] < radar_point_angle[i+1:, :]
-        illumination = illumination.T
-        eta_cart, settings = polarTransform.convertToCartesianImage(eta_pol, center=[Nr//2,0], imageSize=(64, 64), initialAngle=theta[0], finalAngle=theta[-1])
-        illu_cart, settings = polarTransform.convertToCartesianImage(illumination, center=[Nr//2,0], imageSize=(64, 64), initialAngle=theta[0], finalAngle=theta[-1])
+        plt.figure()
+        plt.plot(illumination[:,200], '-r')
+        plt.plot(eta_pol[:,200], '-k')
+        plt.figure()
+        plt.plot(illumination[:,220])
+        plt.plot(eta_pol[:,220])
+        plt.figure()
+        plt.plot(illumination[:,230])
+        plt.plot(eta_pol[:,230])
+        plt.figure()
+        plt.plot(illumination[:,240])
+        plt.plot(eta_pol[:,240])
+        plt.show()
+        eta_cart, settings = polarTransform.convertToCartesianImage(eta_pol, center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
+        illu_cart, settings = polarTransform.convertToCartesianImage(illumination, center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
         plt.figure()
         plt.imshow(illumination)
         plt.figure()
@@ -434,7 +472,7 @@ class Surface(object):
         grid = [self.x, self.y]
         return Surface('loc_incidence({0:s})'.format(self.name), theta_l, grid, self.window_applied)
         
-    def get_shadowing_mask(self, name, H):
+    def get_geometric_shadowing(self, name, H):
         '''
         Shadowing mask along given axis
         Parameters:
@@ -447,7 +485,7 @@ class Surface(object):
                 axis    int
                         define range axis      
         '''
-        return self.etaND.get_shadowing_mask(name, H)    
+        return self.etaND.get_geometric_shadowing(name, H)    
         
     def get_illuminated_surface(self, name, H, axis=0):
         '''
@@ -498,7 +536,29 @@ class Surface(object):
     def save(self, fn):
         self.etaND.save(fn, self.name, self.window_applied)
         
-        
+
+
+def surface_from_file(fn):
+    '''
+    Read surface from file and create instance surface from file
+    '''  
+    hf = h5py.File(fn, 'r')
+    name = hf.attrs['name']
+    window_applied = hf.attrs['window_applied']
+    eta = np.array(hf.get('eta'))
+    ND = hf.attrs['ND']
+    x = np.array(hf.get('x'))
+    if ND == 1:
+        grid = [x]
+    elif ND==2:
+        y = np.array(hf.get('y') )
+        grid = [x, y]
+    elif ND==3:
+        y = np.array(hf.get('y') )
+        z = np.array(hf.get('z'))
+        grid = [x, y, z]
+    return Surface(name, eta, grid, window_applied)
+
         
 def plot_surfaces2d(list_of_surfaces, xi, yi, y_sub=None, x_sub=None):
     '''
