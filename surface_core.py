@@ -138,6 +138,8 @@ class _Surface2D(object):
         
     def get_deta_dx(self, cut_off_kx=None):
         kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x, self.y])
+        if cut_off_kx is None:
+            cut_off_kx = kx[-1]
         #TODO: this depends on the indexing can you make a check when initializing the surface?
         kx_cut = np.where(np.abs(kx)<cut_off_kx, kx, 0)
         kx_mesh = np.outer(kx_cut, np.ones(len(ky)))
@@ -148,6 +150,9 @@ class _Surface2D(object):
           
     def get_deta_dy(self, cut_off_ky=None):
         kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x, self.y])
+
+        if cut_off_ky is None:
+            cut_off_ky = ky[-1]
         #TODO: this depends on the indexing can you make a check when initializing the surface?
         ky_cut = np.where(np.abs(ky)<cut_off_ky, ky, 0)
         if cut_off_ky==None:
@@ -161,6 +166,9 @@ class _Surface2D(object):
     
     def plot_3d_surface(self):
         plotting_interface.plot_3d_surface(self.x, self.y, self.eta)
+
+    def plot_3d_as_2d(self):
+        plotting_interface.plot_3d_as_2d(self.x, self.y, self.eta)
             
     def fft_interpolate(self, inter_factor_x, inter_factor_y):
         '''
@@ -184,6 +192,7 @@ class _Surface2D(object):
         # TODO: differentiate between kx-ky and k,w
         # create polar image
         # improve check for x grid and y grid!
+        # Extension needed so that antenna position is in the image
         if self.x[0]<=0:
             x_all = self.x
         else:
@@ -195,6 +204,7 @@ class _Surface2D(object):
         x_mesh, y_mesh = np.meshgrid(x_all, y_all, indexing='ij')
         r_mesh = np.sqrt(x_mesh**2 + y_mesh**2)
         theta_mesh = np.arctan2(y_mesh, x_mesh)
+        
         Nx_all, Ny_all = x_mesh.shape
         eta_all = np.zeros(x_mesh.shape)
         eta_all[Nx_all-self.Nx:,Ny_all-self.Ny:] = self.eta
@@ -203,16 +213,12 @@ class _Surface2D(object):
         
         radiusSize = self.Nx + self.Ny
         initAngle = np.min(theta_mesh)
-        finAngle = np.max(theta_mesh)
-        
-        
-
+        finAngle = np.max(theta_mesh)       
 
         eta_pol, settings = polarTransform.convertToPolarImage(eta_all.swapaxes(0,1),  initialRadius=0, center=[x_center_ind,y_center_ind], initialAngle=initAngle,
                                                             finalAngle=finAngle, radiusSize=radiusSize)
-        eta_pol = eta_pol.swapaxes(0,1)
-        print(settings)
-        #(self.eta, imageSize=(2*N,2*N), initialAngle=theta[0], finalAngle=theta[-1])
+        eta_pol = eta_pol.swapaxes(0,1)        
+        
         # calculate shadowing for each angle
         #'''
         Nr, Ntheta = eta_pol.shape
@@ -222,38 +228,15 @@ class _Surface2D(object):
         rN = settings.finalRadius
         r = np.linspace(r0, rN, Nr, endpoint=True)
         theta = np.linspace(theta0, thetaN, Ntheta, endpoint=True)
-        plotting_interface.plot_3d_as_2d(r, theta*180/np.pi, eta_pol)
-        '''
-        import pylab as plt
-        plt.figure()
-        plt.imshow(eta_pol.T)
-        plt.show()
-        '''
-        
-        '''
-        if axis==0:
-            r = np.outer(self.x, np.ones(self.Ny))  
-            radar_point_angle = np.arctan2(r, (H - self.eta))
-        else:
-            r = np.outer(self.y, np.ones(self.Nx))    
-            radar_point_angle = np.arctan2(r, (H - self.eta.transpose()))
-        illumination = np.ones(r.shape)
-        for i in range(0,illumination.shape[axis]-1): 
-            illumination[i+1:,:] *= radar_point_angle[i,:] < radar_point_angle[i+1:,:] 
-        if axis==1:
-            illumination = illumination.transpose()
-        '''
-        
+        #plotting_interface.plot_3d_as_2d(r, theta*180/np.pi, eta_pol)
+     
 
         r_pol, theta_pol = np.meshgrid(r, theta, indexing='ij')#NOTE: ??? changed? opposite indexing to match with polarTransform
-        radar_point_angle = np.arctan2(r_pol, (H - eta_pol))
-        plt.figure()
-        plt.plot(np.gradient((r_pol/(H - eta_pol))[:,200])*180/.np.pi)
-        plt.show()
-        illumination = np.ones(eta_pol.shape)
-        for i in range(0, Nr-1):
-            illumination[i+1:, :] *= (radar_point_angle[i, :] - radar_point_angle[i+1, :])*180/np.pi < 0.02
-        
+        radar_point_angle = r_pol/(H - eta_pol)#np.arctan2(r_pol, (H - eta_pol))
+        illumination = np.ones(eta_pol.shape, dtype=int)
+        for i in range(1,10):
+            illumination[i:, :] *= ((radar_point_angle[:-i, :] - radar_point_angle[i:, :])*180/np.pi < 0).astype('int')
+        '''
         plt.figure()
         plt.plot(illumination[:,200], '-r')
         plt.plot(eta_pol[:,200], '-k')
@@ -267,14 +250,12 @@ class _Surface2D(object):
         plt.plot(illumination[:,240])
         plt.plot(eta_pol[:,240])
         plt.show()
-        eta_cart, settings = polarTransform.convertToCartesianImage(eta_pol, center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
-        illu_cart, settings = polarTransform.convertToCartesianImage(illumination, center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
-        plt.figure()
-        plt.imshow(illumination)
-        plt.figure()
-        plt.imshow(illu_cart)
-        plt.show()
-        return Surface(name, illumination, [self.x, self.y])
+        '''
+        #eta_cart, settings = polarTransform.convertToCartesianImage(eta_pol.swapaxes(0,1), center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
+        illu_cart, settings = polarTransform.convertToCartesianImage(illumination.swapaxes(0,1), center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
+        illu_cart = illu_cart.swapaxes(0,1)
+        plotting_interface.plot_3d_as_2d(x_all, y_all, illu_cart)
+        return illu_cart[-self.Nx:,-self.Ny:]
             
     def get_illuminated_surface(self, name, H, axis=0):
         if axis==0:
@@ -371,6 +352,14 @@ class Surface(object):
         elif self.ND==3:
             self.etaND.plot_3d_surface()
 
+    def plot_3d_as_2d(self):
+        if self.ND==1:
+            print('Waring: 3d plotting not enabled in 1d case')
+        elif self.ND==2:
+            self.etaND.plot_3d_as_2d()
+        elif self.ND==3:
+            self.etaND.plot_3d_as_2d()
+
     def apply_window(self, window):
         if self.window_applied==True:
             print('\nWarning: a window has already been applied, the window is not applied!')
@@ -438,7 +427,7 @@ class Surface(object):
     def replace_eta(self, new_eta):
         self.etaND.eta =new_eta
         
-    def get_local_incidence_surface(self, H, k_cut_off=None, approx=False):
+    def get_local_incidence_surface(self, name, H, k_cut_off=None, approx=False):
         '''
         Gets the local incidence angle based on the radar elevation H above the mean sea level
         Parameters:
@@ -452,9 +441,9 @@ class Surface(object):
         '''
         #TODO make all functions available in all dimensions and return 0 if suitable
 
-        if k_cut_off == None:
-            deta_dx = self.get_deta_dx(0)
-            deta_dy = self.get_deta_dy(0)
+        if k_cut_off is None:
+            deta_dx = self.get_deta_dx(None)
+            deta_dy = self.get_deta_dy(None)
         else:
             deta_dx = self.get_deta_dx(k_cut_off[0])
             deta_dy = self.get_deta_dy(k_cut_off[1])
@@ -470,7 +459,7 @@ class Surface(object):
             cos_theta_l = (x_mesh*deta_dx + y_mesh*deta_dy + (H-self.eta))/(n_norm*b_norm)
         theta_l = np.arccos(cos_theta_l)
         grid = [self.x, self.y]
-        return Surface('loc_incidence({0:s})'.format(self.name), theta_l, grid, self.window_applied)
+        return Surface(name, theta_l, grid, self.window_applied)
         
     def get_geometric_shadowing(self, name, H):
         '''
@@ -485,7 +474,7 @@ class Surface(object):
                 axis    int
                         define range axis      
         '''
-        return self.etaND.get_geometric_shadowing(name, H)    
+        return Surface(name, self.etaND.get_geometric_shadowing(name, H), self.grid, self.window_applied)    
         
     def get_illuminated_surface(self, name, H, axis=0):
         '''
