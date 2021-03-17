@@ -3,30 +3,79 @@ import numpy as np
 import pylab as plt
 from wave_tools import ConstructWave
 from help_tools import plotting_interface
-'''
-Tp = 10
-Hs = 3.0
-N = 256
-x = np.linspace(0,2000, N)
+#'''
+Hs = 2.0
 q2 = []
+q4 = []
+q6 = []
+q8 = []
+q10 = []
+q12 = []
+dx = 7.5
+dy = 7.5
+x = np.arange(-250, 250, dx)
+y = np.arange(500, 1000, dy)
+Alpha = 0.023
+gamma = 3.3
+theta_mean = np.pi/2 - 10*np.pi/180
+save_files = False
 
-smax_list = np.linspace(1, 20, 100)
+
+smax_list = [1]#np.linspace(1, 100, 100)
 
 for smax in smax_list:
 
-    x, y, eta2d = ConstructWave.JonswapWave2D(x, Tp, Hs, smax)
+    surf2d = ConstrucWave.JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
+    surf2d.plot_3d_as_2d()
+
     #plotting_interface.plot_3d_surface(x, y, eta2d)
     minkval = pypaya2.imt_for_image(eta2d, threshold=0)
     q2.append(minkval['q2'])
+    q2.append(minkval['q4'])
+    q2.append(minkval['q6'])
+    q2.append(minkval['q8'])
+    q2.append(minkval['q10'])
+    q2.append(minkval['q12'])
 
 plt.figure()
 plt.plot(smax_list, q2)
-plt.ylabel(r'$q_2$')
+plt.ylabel(r'$q_{2}$')
 plt.xlabel(r'$s_{\max}$')
-plt.savefig('first_comparison.pdf', bbox_inches='tight')
+if save_files:
+    plt.savefig('smax_q2.pdf', bbox_inches='tight')
+plt.figure()
+plt.plot(smax_list, q4)
+plt.ylabel(r'$q_{4}$')
+plt.xlabel(r'$s_{\max}$')
+if save_files:
+    plt.savefig('smax_q4.pdf', bbox_inches='tight')
+plt.figure()
+plt.plot(smax_list, q6)
+plt.ylabel(r'$q_{6}$')
+plt.xlabel(r'$s_{\max}$')
+if save_files:
+    plt.savefig('smax_q6.pdf', bbox_inches='tight')
+plt.figure()
+plt.plot(smax_list, q8)
+plt.ylabel(r'$q_{8}$')
+plt.xlabel(r'$s_{\max}$')
+if save_files:
+    plt.savefig('smax_q8.pdf', bbox_inches='tight')
+plt.figure()
+plt.plot(smax_list, q10)
+plt.ylabel(r'$q_{10}$')
+plt.xlabel(r'$s_{\max}$')
+if save_files:
+    plt.savefig('smax_q10.pdf', bbox_inches='tight')
+plt.figure()
+plt.plot(smax_list, q12)
+plt.ylabel(r'$q_{12}$')
+plt.xlabel(r'$s_{\max}$')
+if save_files:
+    plt.savefig('smax_q12.pdf', bbox_inches='tight')
 plt.show()
+#'''
 '''
-
 name = r'$\eta$'
 Nx = 64#1024
 Ny = 64#2*1024
@@ -62,3 +111,4 @@ print('q9 = ', minkval1['q9'] - minkval2['q9'])
 print('q11 = ', minkval1['q11'] - minkval2['q11'])
 
 
+'''
