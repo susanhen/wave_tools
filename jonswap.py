@@ -1,4 +1,4 @@
-from numpy import tanh, ones, where, linspace, exp, cosh, sqrt, gradient, zeros, bitwise_and, max
+
 import numpy as np
 
 def jonswap(w, wp, Hs, gamma=3.3, w_cut=None):
@@ -62,11 +62,23 @@ def jonswap_k(k, wp, Hs, h, gamma=3.3, k_cut=None):
     jonny[0] = 0
     return jonny
 
+def jonswap_k_pavel(k, kp, Hs, gamma):
+    if k[0] == 0:
+        kk = k[1:]
+    else:
+        kk = k
+    s = np.where(kk<=kp, 0.07, 0.09)**2
+    S = (1/(2*(kk**3)))*np.exp((-5/4)*(kp/kk)**2) * gamma**(np.exp(-((np.sqrt(kk)-np.sqrt(kp))**2)/(2*s*kp)))
+    S *=(Hs/(4*np.sqrt(np.trapz(S,kk))))**2
+    if k[0]==0:
+        return np.block([0, S])
+    else:
+        return S
 
 if __name__=='__main__':
     import pylab as plt
     # generate J(w)
-    w = linspace(0.03,1.8,1000)
+    w = np.linspace(0.03,1.8,1000)
     g = 9.81
     wp = 0.8
     gamma = 3.3
@@ -75,17 +87,17 @@ if __name__=='__main__':
     h = 100
     for gamma in [1., 1.8, 2.5, 3.3]:
         ji = jonswap(w,wp, Hs, gamma)
-        print('Hs ( S(w)) = ', sqrt(sum(ji*gradient(w)))*4)
+        print('Hs ( S(w)) = ', np.sqrt(sum(ji*np.gradient(w)))*4)
         plt.plot(w, ji)
         
     # generate J(k)        
     #k = linspace(0.0001, 0.2, 1000) 
-    k = linspace(0, 0.2, 1000)
+    k = np.linspace(0, 0.2, 1000)
 
     plt.figure()
     for gamma in [1., 1.8, 2.5, 3.3]:
         ji = jonswap_k(k,wp, Hs, h, gamma)
-        print('Hs ( S(k)) = ', sqrt(sum(ji*gradient(k)))*4)
+        print('Hs ( S(k)) = ', np.sqrt(sum(ji*np.gradient(k)))*4)
         plt.plot(k, ji)     
         ji = jonswap(w,wp, Hs, gamma)
         plt.plot(w**2/9.81, 0.5*ji*sqrt(k/9.81))
@@ -93,22 +105,22 @@ if __name__=='__main__':
     # generate example with surface elevation
     from numpy import pi, cos, outer, sum, var
     from scipy import stats
-    k = linspace(0.0000001, 1.0, 66)
+    k = np.linspace(0.0000001, 1.0, 66)
     dk = k[-1]-k[-2]
     ji = jonswap_k(k,wp, Hs, h, 5., 0.15)
-    x = linspace(0,2*pi/dk, 2*len(k))
+    x = np.linspace(0,2*pi/dk, 2*len(k))
     
     phi = stats.uniform(scale=2*pi).rvs(len(k))-pi
-    eta = 2*sum( sqrt(0.5*ji*dk)*cos(outer(ones(len(x)), k)*outer(x, ones(len(k)))+outer(ones(len(x)), phi)), axis=1)
+    eta = 2*sum( np.sqrt(0.5*ji*dk)*cos(outer(np.ones(len(x)), k)*outer(x, np.ones(len(k)))+outer(np.ones(len(x)), phi)), axis=1)
     from numpy import fft, zeros, flipud, conjugate
     eta2_coeffs = zeros(2*len(k), dtype=complex)
-    eta2_coeffs[len(k)+1:] = (sqrt(0.5*ji*dk)*len(k) * exp(1j*phi))[1:]
+    eta2_coeffs[len(k)+1:] = (np.sqrt(0.5*ji*dk)*len(k) * np.exp(1j*phi))[1:]
     eta2_coeffs[1:len(k)] = flipud(conjugate(eta2_coeffs[len(k)+1:]))
     eta2 = 2*fft.ifft(fft.ifftshift(eta2_coeffs)).real
     plt.figure()
     plt.plot(x,eta)
     plt.plot(x,eta2)
-    print(4*sqrt(var(eta)))
+    print(4*np.sqrt(var(eta)))
     plt.show()
 		
 

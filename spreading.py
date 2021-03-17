@@ -74,16 +74,24 @@ def mitsuyatsu_spreading(spec1d, theta_mean, smax, wp, k, h=1000, N_theta=360):
     
     return S_cart
 
+def mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax):
+    kk, th = np.meshgrid(k, theta, indexing='ij')
+    s = np.where(kk<=kp, smax * (np.sqrt(kk/kp))**5, smax * (np.sqrt(kk/kp))**(-2.5))
+    D = (2**(2*s-1))/np.pi * (np.cos((th-theta_mean)/2)**2)**s
+    D /= np.outer(np.sum(np.gradient(th, axis=1)*D, axis=1), np.ones(len(theta)))    
+    return D
+
 if __name__=='__main__':
     import pylab as plt
     from wave_tools import jonswap as j
-    theta_mean = np.pi/2
-    smax = 1
+    from help_tools import plotting_interface
+    theta_mean = np.pi/2 + 30*np.pi/180
+    smax = 70
     wp = 0.2
     N = 256
     gamma = 3.3
     wp = 0.8
-    Hs = 3.0
+    Hs = 2.0
     h = 100. 
     g = 9.81
     k = np.linspace(0, 0.5, N)
@@ -91,7 +99,7 @@ if __name__=='__main__':
 
 
     #Mitsuyasu distribution based on codeine 2s A, normalization (integral should be one)
-
+    '''
     ji = j.jonswap(w, wp, Hs, h, gamma) 
     plt.figure()
     plt.plot(ji)
@@ -100,3 +108,11 @@ if __name__=='__main__':
     plt.figure()
     plt.imshow(D)
     plt.show()
+    '''
+    k = np.arange(0.01, 0.35, 0.005)
+    theta = np.linspace(-np.pi, np.pi, 100)
+    Alpha = 0.023
+    kp = 2*np.pi*Alpha/Hs
+    D = mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax)
+    plotting_interface.plot_3d_as_2d(k*10, theta, D)
+    plotting_interface.show()

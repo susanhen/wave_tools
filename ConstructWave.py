@@ -11,7 +11,7 @@ from wave_tools import spreading
 from scipy import stats
 from scipy.optimize import fsolve
 from help_tools import plotting_interface
-from scipy.special import gamma
+from scipy.special import gamma as gamma_func
 from wave_tools import surface_core
 
 
@@ -103,6 +103,29 @@ def JonswapWave2D(x, Tp, Hs, smax, gamma=3.3, h=1000, theta_mean=0.5*np.pi, N_th
     x, y, eta2d = fft_interface.spectral2physical(total_image, [k_axis, k_axis])
     return x,y, eta2d
 
+def JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax):
+    Nx = len(x)
+    Ny = len(y)
+    dk = 0.005
+    k = np.arange(0.01, 0.35, dk)
+    dtheta=0.05
+    theta=np.arange(-np.pi, np.pi, dtheta)
+    Nk = len(k)
+    Ntheta = len(theta)
+    kp=2*np.pi*Alpha/Hs
+    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
+    D = spreading.mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax)
+    a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
+    xx, yy = np.meshgrid(x, y, indexing='ij')
+    kk, th = np.meshgrid(k, theta, indexing='ij')
+    phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten())
+    ascale1 = np.random.rand(Nk, Ntheta)*2 - 1
+    ascale2 = np.random.rand(Nk, Ntheta)*2 - 1
+    a1 = (ascale1*a_mean).flatten()
+    a2 = (ascale2*a_mean).flatten()
+    eta = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
+    return surface_core.Surface('jonswap', eta, [x, y])
+
 class DirectionalSpectrum:
     def __init__(self, Tp, theta_p, gam, c, F):
         self.Tp = Tp
@@ -119,7 +142,7 @@ class DirectionalSpectrum:
                 
         self.s = lambda f:((c*(2*np.pi*self.fp*self.U10/g)**(-2.5)*(f/self.fp)**5)*(1/2 + 1/2*np.sign(self.fp - f)) +
     (c*(2*np.pi*self.fp*self.U10/g)**(-2.5)*(f/self.fp)**(-2.5))*(1/2 -1/2*np.sign(self.fp - f)))
-        self.D = lambda f, theta: (2**(2*self.s(f)-1)/np.pi*(gamma(self.s(f)+1))**2./gamma(2*self.s(f)+1)*(np.abs(np.cos((theta-theta_p)/2)))**(2*self.s(f)))
+        self.D = lambda f, theta: (2**(2*self.s(f)-1)/np.pi*(gamma_func(self.s(f)+1))**2./gamma_func(2*self.s(f)+1)*(np.abs(np.cos((theta-theta_p)/2)))**(2*self.s(f)))
         self.Sdir=lambda f, theta: (self.S(f)*self.D(f,theta))
         
     def plot_s(self, f_min, f_max, N=200):
@@ -295,14 +318,18 @@ class SpectralRealization:
 if __name__=='__main__':
     t = np.linspace(0,100, 200)
     Tp = 10
-    Hs = 3.0
-    smax = 1
+    Hs = 2.0
+    Alpha = 0.023
+    smax = 70
+    theta_mean = np.pi/2+30*np.pi/180
     N = 256
+    gamma = 3.3
+    '''
     eta = JonswapWave1D(t, Tp, Hs)
     print('Hs in 1d: ', np.sqrt(np.var(eta)))
     #plt.figure()
     #plt.plot(t, eta)
-
+    '''
 
 
     '''
@@ -311,6 +338,7 @@ if __name__=='__main__':
     print('Hs = ', np.sqrt(np.var(eta2d)))
     plt.figure()
     plt.imshow(eta2d)
+    '''
     '''
     dx = 2
     dy = dx
@@ -342,3 +370,12 @@ if __name__=='__main__':
     inverted_surface.save('../../Data/SimulatedWaves/inv_surf.hdf5')
     
     plt.show()
+    '''
+    dx = 7.5
+    dy = 7.5
+    x = np.arange(-250, 250, dx)
+    y = np.arange(500, 1000, dy)
+    surf2d = JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
+    surf2d.plot_3d_as_2d()
+    plt.show()
+
