@@ -58,17 +58,14 @@ def mitsuyatsu_spreading(spec1d, theta_mean, smax, wp, k, h=1000, N_theta=360):
     
     with np.errstate(divide='ignore', invalid='ignore'):
         dw_dk = np.where(C>0.001, (A + B)/C, 1)
-    
                                
-    
     mu = np.where(w_polar<=wp, mu1, mu2)
     s = smax*(w_polar/wp)**mu
     
     D_polar = ((np.cos((theta_polar-theta_mean)/2) )**2)**s
     # Scale spreading function to maintain energy
     D_polar /= np.outer(np.ones(N_theta), np.sum(D_polar, axis=0))
-    S_polar = spec_polar * D_polar * dw_dk
-    
+    S_polar = spec_polar * D_polar * dw_dk  
     
     S_cart, settings = polarTransform.convertToCartesianImage(S_polar, imageSize=(2*N,2*N), initialAngle=theta[0], finalAngle=theta[-1])
     

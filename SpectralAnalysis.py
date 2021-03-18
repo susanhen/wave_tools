@@ -18,40 +18,40 @@ def _symmetrize2d(surf):
 
 
 class _SpectralAnalysis1d(object):
-    def __init__(self, coeffs, spectrum, x_grid, grid_cut_off=None):
+    def __init__(self, coeffs, spectrum, kx, grid_cut_off=None):
         '''
         1D specturm, coeffs may be None, typically used for integrated
         subspectra for 2D and 3D spectra
         '''
         self.coeffs = coeffs
         self.spectrum = spectrum
-        if type(x_grid) == list:
-            self.x_grid = x_grid[0]
+        if type(kx) == list:
+            self.kx = kx[0]
         else:   
-            self.x_grid = x_grid
+            self.kx = kx
         self.SAx = self
-        self.dx = abs(self.x_grid[1]-self.x_grid[0])
-        self.Nx = len(self.x_grid)
+        self.dx = abs(self.kx[1]-self.kx[0])
+        self.Nx = len(self.kx)
         
     def get_S(self, mov_av=1):
         '''
         Return the 1d spectrum with the corresponding grid
         '''
-        return self.x_grid, moving_average.moving_average(self.spectrum.copy(), mov_av)          
+        return self.kx, moving_average.moving_average(self.spectrum.copy(), mov_av)          
         
     def get_C(self):
         '''
         Return the 1d complex coeffiecients with the corresponding grid
         If the functions returns None as self.coeffs, only the spectral values are available
         '''
-        return self.x_grid, self.coeffs.copy()           
+        return self.kx, self.coeffs.copy()           
         
     def get_S_one_sided(self, mov_av=1):
         '''
         Return upper half of the 1d spectrum  with the corresponding grid 
         '''
-        N_half = int(0.5*len(self.x_grid))
-        return self.x_grid[N_half:], moving_average.moving_average(2*self.spectrum[N_half:], mov_av)
+        N_half = int(0.5*len(self.kx))
+        return self.kx[N_half:], moving_average.moving_average(2*self.spectrum[N_half:], mov_av)
        
     def get_characteristic_peak(self, mov_av=80, moment=1, plot_spec=False):
         '''
@@ -65,18 +65,18 @@ class _SpectralAnalysis1d(object):
         plot_spec   plotting the spectrum with 80% of the central values
         '''
         
-        N_half = int(0.5*len(self.x_grid))
+        N_half = int(0.5*len(self.kx))
         S_smooth = moving_average.moving_average(self.spectrum[N_half:], mov_av) 
         lower_ind = np.argwhere(S_smooth>=0.8*max(S_smooth))[0][0]
         upper_ind = np.argwhere( S_smooth >=0.8*max( S_smooth ))[-1][0] 
         if plot_spec:    
             plt.figure()
-            plt.plot(self.x_grid[N_half:], S_smooth/max(S_smooth))
-            plt.plot(self.x_grid[N_half:][lower_ind:upper_ind], S_smooth[lower_ind:upper_ind]/max( S_smooth ))
-        m_neg1  = np.sum(( S_smooth [lower_ind :upper_ind ]*self.dx)*(self.x_grid[N_half:][lower_ind :upper_ind ])**(-1))
-        m0  = np.sum(( S_smooth [lower_ind :upper_ind ]*self.dx)*(self.x_grid[N_half:][lower_ind :upper_ind ])**(0))
-        m1  = np.sum(( S_smooth [lower_ind :upper_ind ]*self.dx)*(self.x_grid[N_half:][lower_ind :upper_ind ])**(1))
-        m2  = np.sum(( S_smooth [lower_ind :upper_ind ]*self.dx)*(self.x_grid[N_half:][lower_ind :upper_ind ])**(2))
+            plt.plot(self.kx[N_half:], S_smooth/max(S_smooth))
+            plt.plot(self.kx[N_half:][lower_ind:upper_ind], S_smooth[lower_ind:upper_ind]/max( S_smooth ))
+        m_neg1  = np.sum(( S_smooth [lower_ind :upper_ind ]*self.dx)*(self.kx[N_half:][lower_ind :upper_ind ])**(-1))
+        m0  = np.sum(( S_smooth [lower_ind :upper_ind ]*self.dx)*(self.kx[N_half:][lower_ind :upper_ind ])**(0))
+        m1  = np.sum(( S_smooth [lower_ind :upper_ind ]*self.dx)*(self.kx[N_half:][lower_ind :upper_ind ])**(1))
+        m2  = np.sum(( S_smooth [lower_ind :upper_ind ]*self.dx)*(self.kx[N_half:][lower_ind :upper_ind ])**(2))
 
         if moment==0:
             Tc = 2*np.pi*(m_neg1/m0)
@@ -95,42 +95,42 @@ class _SpectralAnalysis1d(object):
         fn          filename for saving plot, also used as title
         extent      tupel of limits (x_lower, x_upper), y_lower, y_upper) #FIXME CHECK if None option is implemented        
         '''
-        plotting_interface.plot_1D_spec(self.spectrum, self.x_grid, fn, x_label, y_label='', save=save, fn=fn)   # FIXME always plot scaled spectra!!! # FIXME apply extent
+        plotting_interface.plot_1D_spec(self.spectrum, self.kx, fn, x_label, y_label='', save=save, fn=fn)   # FIXME always plot scaled spectra!!! # FIXME apply extent
 
     def remove_zeroth(self):
         self.coeffs[self.Nx//2] = 0
         self.spectrum[self.Nx//2] = 0
         
 class _SpectralAnalysis2d(object):
-    def __init__(self, coeffs, spectrum, xy_grid, grid_cut_off=None):
+    def __init__(self, coeffs, spectrum, k, grid_cut_off=None):
         self.coeffs = coeffs
         self.spectrum = spectrum
-        self.x_grid = xy_grid[0]
-        self.y_grid = xy_grid[1]
+        self.kx = k[0]
+        self.ky = k[1]
         if grid_cut_off == None:
-            self.x_cut_off = self.x_grid[-1]
-            self.y_cut_off = self.y_grid[-1]
+            self.x_cut_off = self.kx[-1]
+            self.y_cut_off = self.ky[-1]
         else:
             self.x_cut_off = grid_cut_off[0]
             self.y_cut_off = grid_cut_off[1]
-        self.Nx = len(self.x_grid)
-        self.Ny = len(self.y_grid)
-        self.dx = abs(self.x_grid[1]-self.x_grid[0])
-        self.dy = abs(self.y_grid[1]-self.y_grid[0])        
-        self.SAx = _SpectralAnalysis1d(None, self.dy*np.sum(spectrum,axis=1), self.x_grid) 
-        self.SAy = _SpectralAnalysis1d(None, self.dx*np.sum(spectrum,axis=0), self.y_grid)#
+        self.Nx = len(self.kx)
+        self.Ny = len(self.ky)
+        self.dx = abs(self.kx[1]-self.kx[0])
+        self.dy = abs(self.ky[1]-self.ky[0])        
+        self.SAx = _SpectralAnalysis1d(None, self.dy*np.sum(spectrum,axis=1), self.kx) 
+        self.SAy = _SpectralAnalysis1d(None, self.dx*np.sum(spectrum,axis=0), self.ky)#
         
     def get_S(self, mov_av=1):
         '''
         Return the 2d spectrum with the corresponding grid
         '''
-        return self.x_grid, self.y_grid, self.spectrum.copy()           
+        return self.kx, self.ky, self.spectrum.copy()           
         
     def get_C(self):
         '''
         Return the 2d complex coefficients with the corresponding grid
         '''
-        return self.x_grid, self.y_grid, self.coeffs.copy()  
+        return self.kx, self.ky, self.coeffs.copy()  
         
     def plot(self):#, fn, waterdepth, extent, U, dB=True, vmin=-60, save=False):
         '''
@@ -140,12 +140,12 @@ class _SpectralAnalysis2d(object):
         waterdepth  used when defining dispersion relation. If unkonw maybe set to high value #FIXME do this internally and option to set NONE or is there?
         extent      tupel of limits (x_lower, x_upper, y_lower, y_upper) #FIXME CHECK if None option is implemented        
         '''
-        plotting_interface.plot_kx_ky_spec(self.x_grid, self.y_grid, self.spectrum)  #.plot_k_w_mod2D(self.x_grid, self.y_grid, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)  
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum)  #.plot_k_w_mod2D(self.kx, self.ky, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)  
         
     def get_disp_filtered_spec(self, U, h, filter_width_up, filter_width_down, filter_width_axis, first_axis_k):
         if first_axis_k==True:
-            disp_filt = dispersion_filter.k_w_filter(self.Nx, self.Ny, U, h, self.x_grid, self.y_grid, filter_width_up, filter_width_down, filter_width_axis, N_fine=2000)                    
-            return SpectralAnalysis(disp_filt*self.coeffs.copy(), disp_filt*self.spectrum.copy(), [self.x_grid, self.y_grid])            
+            disp_filt = dispersion_filter.k_w_filter(self.Nx, self.Ny, U, h, self.kx, self.ky, filter_width_up, filter_width_down, filter_width_axis, N_fine=2000)                    
+            return SpectralAnalysis(disp_filt*self.coeffs.copy(), disp_filt*self.spectrum.copy(), [self.kx, self.ky])            
         else:
             print('The configuration where omega is the first axis has not yet been implemented. Do it!')
             return None
@@ -157,13 +157,13 @@ class _SpectralAnalysis2d(object):
         dx =  7.5
         dkx = self.dx
         dky = self.dy
-        kx_hp_filter = bf.high_pass_filter(np.abs(self.x_grid), limits[0], 0)
-        ky_hp_filter = bf.high_pass_filter(np.abs(self.y_grid), limits[1], 1)
+        kx_hp_filter = bf.high_pass_filter(np.abs(self.kx), limits[0], 0)
+        ky_hp_filter = bf.high_pass_filter(np.abs(self.ky), limits[1], 1)
         #TODO check if correct and move into filter_core possibly not needed either!
         kx_hp_filter = _symmetrize2d(kx_hp_filter)
         ky_hp_filter = _symmetrize2d(ky_hp_filter)
         '''
-        kx, ky = np.meshgrid(self.x_grid, self.y_grid, indexing='ij')
+        kx, ky = np.meshgrid(self.kx, self.ky, indexing='ij')
         k = np.sqrt(kx**2 + ky**2)
         k_hp_filter = (k>limit).astype('int')
         self.coeffs *= k_hp_filter
@@ -172,8 +172,8 @@ class _SpectralAnalysis2d(object):
     def get_2d_MTF(self, grid_offset):
         # TODO improve handling of cut_off to be set globally
         #TODO: this depends on the indexing can you make a check when initializing the surface?
-        kx = self.x_grid
-        ky = self.y_grid
+        kx = self.kx
+        ky = self.ky
         kx_cut = np.where(np.abs(kx)<self.x_cut_off, kx, 0)
         ky_cut = np.where(np.abs(ky)<self.y_cut_off, ky, 0)
         kx_mesh = np.outer(kx_cut, np.ones(len(ky)))
@@ -209,8 +209,8 @@ class _SpectralAnalysis2d(object):
         '''
         from help_tools import plotting_interface
         import pylab as plt
-        plotting_interface.plot_3d_as_2d(self.x_grid, self.y_grid, MTF.real)
-        plotting_interface.plot_3d_as_2d(self.x_grid, self.y_grid, MTF.imag)
+        plotting_interface.plot_3d_as_2d(self.kx, self.ky, MTF.real)
+        plotting_interface.plot_3d_as_2d(self.kx, self.ky, MTF.imag)
         plt.show()
         '''
         threshold = percentage_of_max * np.max(np.abs(self.coeffs))
@@ -225,7 +225,7 @@ class _SpectralAnalysis2d(object):
         #data[1:,1:mid_w] = np.conjugate(np.flipud(np.fliplr(data[1:,mid_w+1:])))
         #data[0,:] = 0
         #data[:,0] = 0          
-        x, y, eta_invers = fft_interface.spectral2physical(data, [self.x_grid, self.y_grid])
+        x, y, eta_invers = fft_interface.spectral2physical(data, [self.kx, self.ky])
         x += grid_offset[0]
         y += grid_offset[1]
         return surface_core.Surface(name, eta_invers, [x,y], window_applied)
@@ -233,29 +233,31 @@ class _SpectralAnalysis2d(object):
     def remove_zeroth(self):
         self.coeffs[self.Nx//2, self.Ny//2] = 0
         self.spectrum[self.Nx//2, self.Ny//2] = 0
+    
         
 class _SpectralAnalysis3d(object):
-    def __init__(self, coeffs, spectrum, xy_grid, grid_cut_off=None):
+    def __init__(self, coeffs, spectrum, grid, grid_cut_off=None):
         self.coeffs = coeffs
         self.spectrum = spectrum
-        self.x_grid = xyz_grid[0]
-        self.y_grid = xyz_grid[1]
-        self.z_grid = xyz_grid[2]
-        self.SAx = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=1), axis=2), self.x_grid) 
-        self.SAy = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=0), axis=2), self.y_grid)
+        self.w = grid[0]
+        self.kx = grid[1]
+        self.ky = grid[2]
+        self.Nx, self.Ny, self.Nz = self.coeffs.shape
+        self.SAx = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=1), axis=2), self.kx) 
+        self.SAy = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=0), axis=2), self.ky)
         self.SAz = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=0), axis=1), self.z_grid)
         
     def get_S(self, mov_av=1):
         '''
         Return the 2d spectrum with the corresponding grid
         '''
-        return self.x_grid, self.y_grid, self.z_grid, self.spectrum.copy()           
+        return self.w, self.kx, self.ky, self.spectrum.copy()           
 
     def get_C(self):
         '''
         Return the 2d complex coefficients with the corresponding grid
         '''
-        return self.x_grid, self.y_grid, self.z_grid, self.coeffs.copy()   
+        return self.w, self.kx, self.ky, self.coeffs.copy()   
 
     def plot(self,fn, waterdepth, extent, U, dB, vmin, save):
         '''
@@ -265,8 +267,8 @@ class _SpectralAnalysis3d(object):
         print('Not implemented yet')
 
     def remove_zeroth(self):
-        self.coeffs[self.Nx//2, self.Ny//2, self.Ny//2] = 0
-        self.spectrum[self.Nx//2, self.Ny//2, self.Ny//2] = 0
+        self.coeffs[self.Nx//2, self.Ny//2, self.Nz//2] = 0
+        self.spectrum[self.Nx//2, self.Ny//2, self.Nz//2] = 0
         
         
 
@@ -291,18 +293,19 @@ class SpectralAnalysis(object):
         if len(spectrum.shape)==1:
             self.ND = 1
             self.spectrumND = _SpectralAnalysis1d(coeffs, spectrum, axes_grid, grid_cut_off)
-            self.kx = self.spectrumND.x_grid
+            self.kx = self.spectrumND.kx
         elif len(spectrum.shape)==2:
             self.ND = 2        
             self.spectrumND = _SpectralAnalysis2d(coeffs, spectrum, axes_grid, grid_cut_off)
             # TODO: distinguish different 2d spectra?
-            self.kx = self.spectrumND.x_grid
-            self.ky = self.spectrumND.y_grid
+            self.kx = self.spectrumND.kx
+            self.ky = self.spectrumND.ky
         elif len(spectrum.shape)==3:
             self.ND = 3        
             self.spectrumND = _SpectralAnalysis3d(coeffs, spectrum, axes_grid, grid_cut_off)
-            self.kx = self.spectrumND.x_grid
-            self.ky = self.spectrumND.y_grid
+            self.w = self.spectrumND.w
+            self.kx = self.spectrumND.kx
+            self.ky = self.spectrumND.ky
         else:
             print('\n\nError: Input data spectrum is not of the correct type\n\n')
         

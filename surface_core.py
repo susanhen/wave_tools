@@ -524,6 +524,9 @@ class Surface(object):
 
     def save(self, fn):
         self.etaND.save(fn, self.name, self.window_applied)
+
+    def plot_3d_as_2d(self):
+        self.etaND.plot_3d_as_2d()
         
 
 
