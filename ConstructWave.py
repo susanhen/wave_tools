@@ -126,6 +126,36 @@ def JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax):
     eta = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
     return surface_core.Surface('jonswap', eta, [x, y])
 
+
+def JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
+    # TODO adapt for incorporating current profile
+    g = 9.81
+    Nt = len(t)
+    Nx = len(x)
+    Ny = len(y)
+    dk = 0.005
+    k = np.arange(0.01, 0.35, dk)
+    dtheta=0.05
+    theta=np.arange(-np.pi, np.pi, dtheta)
+    Nk = len(k)
+    Ntheta = len(theta)
+    kp=2*np.pi*Alpha/Hs
+    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
+    D = spreading.mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax)
+    a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
+    xx, yy = np.meshgrid(x, y, indexing='ij')
+    kk, th = np.meshgrid(k, theta, indexing='ij')
+    ww = np.sqrt(kk*g*np.tanh(kk*h))
+    ascale1 = np.random.rand(Nk, Ntheta)*2 - 1
+    ascale2 = np.random.rand(Nk, Ntheta)*2 - 1
+    a1 = (ascale1*a_mean).flatten()
+    a2 = (ascale2*a_mean).flatten()
+    eta = np.zeros((Nt, Nx, Ny))
+    for i in range(0, Nt):
+        phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten()) - np.outer(t[i]*ww, np.ones(Nx*Ny))
+        eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
+    return surface_core.Surface('jonswap', eta, [t, x, y])    
+
 class DirectionalSpectrum:
     def __init__(self, Tp, theta_p, gam, c, F):
         self.Tp = Tp
@@ -371,11 +401,31 @@ if __name__=='__main__':
     
     plt.show()
     '''
+
+    # JONSWAP2D Pavel
+    '''    
     dx = 7.5
     dy = 7.5
     x = np.arange(-250, 250, dx)
     y = np.arange(500, 1000, dy)
     surf2d = JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
     surf2d.plot_3d_as_2d()
+    '''
+
+    #JONSWAP 3D similar to Pavel for 2D
+    dx = 7.5
+    dy = 7.5
+    dt = 1.
+    t = np.arange(0, 5, dt)
+    x = np.arange(-250, 250, dx)
+    y = np.arange(500, 1000, dy)
+    surf3d = JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000)
+    #surf2d.
+    surf3d.plot_3d_as_2d(0)
+
+    surf3d.plot_3d_as_2d(1)
+
+    surf3d.plot_3d_as_2d(2)
+
     plt.show()
 

@@ -242,10 +242,10 @@ class _SpectralAnalysis3d(object):
         self.w = grid[0]
         self.kx = grid[1]
         self.ky = grid[2]
-        self.Nx, self.Ny, self.Nz = self.coeffs.shape
-        self.SAx = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=1), axis=2), self.kx) 
-        self.SAy = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=0), axis=2), self.ky)
-        self.SAz = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=0), axis=1), self.z_grid)
+        self.Nt, self.Nx, self.Ny = self.coeffs.shape
+        self.SAw = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=1), axis=2), self.w) 
+        self.SAx = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=0), axis=2), self.kx)
+        self.SAy = _SpectralAnalysis1d(None, np.sum(np.sum(spectrum,axis=0), axis=1), self.ky)
         
     def get_S(self, mov_av=1):
         '''
@@ -267,8 +267,8 @@ class _SpectralAnalysis3d(object):
         print('Not implemented yet')
 
     def remove_zeroth(self):
-        self.coeffs[self.Nx//2, self.Ny//2, self.Nz//2] = 0
-        self.spectrum[self.Nx//2, self.Ny//2, self.Nz//2] = 0
+        self.coeffs[self.Nt//2, self.Nx//2, self.Ny//2] = 0
+        self.spectrum[self.Nt//2, self.Nx//2, self.Ny//2] = 0
         
         
 

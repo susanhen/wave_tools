@@ -272,7 +272,61 @@ class _Surface2D(object):
 
         return Surface(name, illumination*self.eta.copy(), [self.x, self.y])
 
-            
+
+class _Surface3D(object):
+    '''
+    surface over 2 dimentions, may be over
+    two spatial dimensions or over spatio-temporal domain
+    Not to be used directly but by using class Surface
+    '''
+    def __init__(self, eta, grid):
+        self.eta = eta
+        self.t = grid[0]
+        self.x = grid[1]
+        self.y = grid[2]
+        self.Nt = len(self.t)
+        self.Nx = len(self.x)
+        self.Ny = len(self.y)
+        self.dt = self.t[1]-self.t[0]
+        self.dx = self.x[1]-self.x[0]
+        self.dy = self.y[1]-self.y[0]
+
+    def save(self, fn, name, window_applied):
+        '''
+        saves a Surface to hdf5 file format
+        '''
+        hf = h5py.File(fn, 'w')
+        hf.create_dataset('eta', data=self.eta)
+        hf.create_dataset('t', data=self.t)
+        hf.create_dataset('x', data=self.x)
+        hf.create_dataset('y', data=self.y)
+        hf.attrs['window_applied'] = window_applied 
+        hf.attrs['name'] = name
+        hf.attrs['ND'] = 3
+        hf.close()
+
+    def get_surf2d_at_index(self, time_index, name):
+        '''
+        Returns a 2d surface for the given time index
+        '''
+        return Surface(name+'_at_{0:.2f}'.format(self.t[time_index]), self.eta[time_index,:,:], [self.x, self.y])
+
+    def get_surf2d_at_ti(self, ti, name):
+        time_index = np.min(np.abs(self.t-ti))
+        return self.get_surf2d_at_index(time_index, name)
+
+    def plot_surf2d_at_index(self, time_index, name, flat=True):
+        surf = self.get_surf2d_at_index(time_index, name)
+        if flat:
+            surf.plot_3d_as_2d()
+        else:
+            surf.plot_3d_surface()
+
+    def plot_surf2d_at_ti(self, ti, name, flat=True):
+        time_index = np.min(np.abs(self.t-ti))
+        self.plot_surf2d_at_index(time_index, name, flat)
+        
+
 
 class Surface(object):
     '''
@@ -298,9 +352,9 @@ class Surface(object):
         elif len(eta.shape)==3:
             self.ND = 3        
             self.etaND = _Surface3D(eta, grid)
+            self.t = self.etaND.t
             self.x = self.etaND.x
             self.y = self.etaND.y
-            self.z = self.etaND.z
         else:
             print('\n\nError: Input data spectrum is not of the correct type\n\n')
         self.eta = self.etaND.eta
@@ -310,6 +364,37 @@ class Surface(object):
             
     def get_name(self):
         return self.name
+
+    def replace_grid(self, new_grid):
+        self.grid = new_grid
+        if self.ND==1:
+            if type(new_grid)==list:
+                self.x = new_grid[0]
+            else:
+                self.x=new_grid
+            self.etaND.x = self.x
+        if self.ND==2:
+            self.x = new_grid[0]
+            self.y = new_grid[1]
+            self.etaND.x = self.x
+            self.etaND.y = self.y
+        if self.ND==3:
+            self.t = new_grid[0]
+            self.x = new_grid[1]
+            self.y = new_grid[2]
+            self.etaND.t = self.t
+            self.etaND.x = self.x
+            self.etaND.y = self.y
+
+    def copy2newgrid(self, name, new_grid):
+        if type(new_grid)!=list:
+            if self.ND!=1:
+                print('Error: grid provided does not match for the surface!')
+                raise Exception
+        elif len(new_grid) != self.ND:
+            print('Error: grid provided does not match for the surface!')
+            raise Exception
+        return Surface(name, self.etaND.eta.copy(), new_grid)        
         
     def get_surf(self, x_sub=None, y_sub=None, z_sub=None):
         if self.ND==1:
@@ -318,6 +403,18 @@ class Surface(object):
             return self.etaND.get_surf(x_sub, y_sub)
         elif self.ND==3:
             return self.etaND.get_surf(x_sub, y_sub, z_sub)
+
+    def get_surf2d_at_index(self, time_index, name):
+        if self.ND==3:
+            return self.etaND.get_surf2d_at_index(time_index, name)
+        else:
+            return NotImplemented
+
+    def get_surf2d_at_ti(self, ti, name):
+        if self.ND==3:
+            return self.etaND.get_surf2d_at_ti(ti, name)
+        else:
+            return NotImplemented            
       
     def get_deta_dx(self, kx_cut_off):
         if self.ND==1:
@@ -333,8 +430,7 @@ class Surface(object):
         elif self.ND==2:
             return self.etaND.get_deta_dy(ky_cut_off)
         elif self.ND==3:
-            return self.etaND.get_deta_dy(ky_cut_off)    
-        
+            return self.etaND.get_deta_dy(ky_cut_off)            
               
     def get_r_grid(self):
         if self.ND==1:
@@ -344,21 +440,21 @@ class Surface(object):
         elif self.ND==3:
             return self.etaND.get_r_grid() 
         
-    def plot_3d_surface(self):
+    def plot_3d_surface(self, time_index=0):
         if self.ND==1:
             print('Waring: 3d plotting not enabled in 1d case')
         elif self.ND==2:
             self.etaND.plot_3d_surface()
         elif self.ND==3:
-            self.etaND.plot_3d_surface()
+            self.etaND.plot_surf2d_at_index(time_index, self.name, flat=False)
 
-    def plot_3d_as_2d(self):
+    def plot_3d_as_2d(self, time_index=0):
         if self.ND==1:
             print('Waring: 3d plotting not enabled in 1d case')
         elif self.ND==2:
             self.etaND.plot_3d_as_2d()
         elif self.ND==3:
-            self.etaND.plot_3d_as_2d()
+            self.etaND.plot_surf2d_at_index(time_index, self.name)
 
     def apply_window(self, window):
         if self.window_applied==True:
@@ -374,7 +470,7 @@ class Surface(object):
             self.etaND.eta /= window
             self.window_applied = False
         
-    def fft_interpolate(self, inter_factor_x, inter_factor_y=None, inter_factor_z=None):
+    def fft_interpolate(self, inter_factor_x, inter_factor_y=None, inter_factor_t=None):
         '''
         Interpolate eta by truncated Fourier expansion
         
@@ -396,7 +492,7 @@ class Surface(object):
         elif self.ND==2:
             return self.etaND.fft_interpolate(inter_factor_x, inter_factor_y)
         elif self.ND==3:
-            return self.etaND.fft_interpolate(inter_factor_x, inter_factor_y, inter_factor_z)        
+            return self.etaND.fft_interpolate(inter_factor_t, inter_factor_x, inter_factor_y)        
     
     def find_crests(self, axis, method='zero_crossing'): 
         '''
@@ -517,16 +613,13 @@ class Surface(object):
             x, y, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)            
             k_grid = [x,y]            
         elif self.ND==3:
-            grid = [self.x, self.y, self.z]   
-            x, y, z, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)                   
-            k_grid = [x,y,z]
+            grid = [self.t, self.x, self.y]   
+            w, kx, ky, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)                   
+            k_grid = [w, kx, ky]
         return SpectralAnalysis.SpectralAnalysis(coeffs, abs(coeffs)**2, k_grid, self.window_applied, grid_cut_off)
 
     def save(self, fn):
         self.etaND.save(fn, self.name, self.window_applied)
-
-    def plot_3d_as_2d(self):
-        self.etaND.plot_3d_as_2d()
         
 
 
