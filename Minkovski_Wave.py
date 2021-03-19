@@ -18,24 +18,25 @@ y = np.arange(500, 1000, dy)
 Alpha = 0.023
 gamma = 3.3
 theta_mean = np.pi/2 - 10*np.pi/180
-save_files = False
+save_files = True
 
 
-smax_list = [1]#np.linspace(1, 100, 100)
+smax_list = np.linspace(1, 100, 100)
 
 for smax in smax_list:
+    print('processing for surface for smax {0:.0f} final smax will be {1:.0f}'.format(smax, smax_list[-1]))
 
-    surf2d = ConstrucWave.JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
-    surf2d.plot_3d_as_2d()
+    surf2d = ConstructWave.JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
+    #surf2d.plot_3d_as_2d()
 
     #plotting_interface.plot_3d_surface(x, y, eta2d)
-    minkval = pypaya2.imt_for_image(eta2d, threshold=0)
+    minkval = pypaya2.imt_for_image(surf2d.eta, threshold=0)
     q2.append(minkval['q2'])
-    q2.append(minkval['q4'])
-    q2.append(minkval['q6'])
-    q2.append(minkval['q8'])
-    q2.append(minkval['q10'])
-    q2.append(minkval['q12'])
+    q4.append(minkval['q4'])
+    q6.append(minkval['q6'])
+    q8.append(minkval['q8'])
+    q10.append(minkval['q10'])
+    q12.append(minkval['q12'])
 
 plt.figure()
 plt.plot(smax_list, q2)
