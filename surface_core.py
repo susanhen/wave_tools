@@ -639,9 +639,9 @@ def surface_from_file(fn):
         y = np.array(hf.get('y') )
         grid = [x, y]
     elif ND==3:
+        t = np.array(hf.get('t'))
         y = np.array(hf.get('y') )
-        z = np.array(hf.get('z'))
-        grid = [x, y, z]
+        grid = [t, x, y]
     return Surface(name, eta, grid, window_applied)
 
         
