@@ -3,6 +3,7 @@ import numpy as np
 import pylab as plt
 from wave_tools import ConstructWave
 from help_tools import plotting_interface
+from statistic_tools import confidence
 #'''
 Hs = 2.0
 q2 = []
@@ -19,57 +20,95 @@ Alpha = 0.023
 gamma = 3.3
 theta_mean = np.pi/2 - 10*np.pi/180
 save_files = True
+N_parameters = 100
+N_cases = 100
+smax_list = np.linspace(1, 100, N_parameters)
+
+c_q2 = confidence.Container((N_cases, N_parameters))
+c_q4 = confidence.Container((N_cases, N_parameters))
+c_q6 = confidence.Container((N_cases, N_parameters))
+c_q8 = confidence.Container((N_cases, N_parameters))
+c_q10 = confidence.Container((N_cases, N_parameters))
+c_q12 = confidence.Container((N_cases, N_parameters))
 
 
-smax_list = np.linspace(1, 100, 100)
 
-for smax in smax_list:
+for k in range(0, N_parameters):
+    smax = smax_list[k]
     print('processing for surface for smax {0:.0f} final smax will be {1:.0f}'.format(smax, smax_list[-1]))
+    for i in range(0, N_cases):
+        surf2d = ConstructWave.JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
+        minkval = pypaya2.imt_for_image(surf2d.eta, threshold=0)
+        c_q2.add_case_at(minkval['q2'], k)
+        c_q4.add_case_at(minkval['q4'], k)
+        c_q6.add_case_at(minkval['q6'], k)
+        c_q8.add_case_at(minkval['q8'], k)
+        c_q10.add_case_at(minkval['q10'], k)
+        c_q12.add_case_at(minkval['q12'], k)
 
-    surf2d = ConstructWave.JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
-    #surf2d.plot_3d_as_2d()
 
-    #plotting_interface.plot_3d_surface(x, y, eta2d)
-    minkval = pypaya2.imt_for_image(surf2d.eta, threshold=0)
-    q2.append(minkval['q2'])
-    q4.append(minkval['q4'])
-    q6.append(minkval['q6'])
-    q8.append(minkval['q8'])
-    q10.append(minkval['q10'])
-    q12.append(minkval['q12'])
+        #surf2d.plot_3d_as_2d()
+        '''
+        #plotting_interface.plot_3d_surface(x, y, eta2d)
+        minkval = pypaya2.imt_for_image(surf2d.eta, threshold=0)
+        q2.append(minkval['q2'])
+        q4.append(minkval['q4'])
+        q6.append(minkval['q6'])
+        q8.append(minkval['q8'])
+        q10.append(minkval['q10'])
+        q12.append(minkval['q12'])
+        '''
 
 plt.figure()
-plt.plot(smax_list, q2)
+plt.plot(smax_list, c_q2.mean(), 'r-')
+conf_lower, conf_upper = c_q2.conf_int(0.95)
+plt.plot(conf_lower, 'k--')
+plt.plot(conf_upper, 'k--')
 plt.ylabel(r'$q_{2}$')
 plt.xlabel(r'$s_{\max}$')
 if save_files:
     plt.savefig('smax_q2.pdf', bbox_inches='tight')
 plt.figure()
-plt.plot(smax_list, q4)
+plt.plot(smax_list, c_q4.mean(), 'r-')
+conf_lower, conf_upper = c_q4.conf_int(0.95)
+plt.plot(conf_lower, 'k--')
+plt.plot(conf_upper, 'k--')
 plt.ylabel(r'$q_{4}$')
 plt.xlabel(r'$s_{\max}$')
 if save_files:
     plt.savefig('smax_q4.pdf', bbox_inches='tight')
 plt.figure()
-plt.plot(smax_list, q6)
+plt.plot(smax_list, c_q6.mean(), 'r-')
+conf_lower, conf_upper = c_q6.conf_int(0.95)
+plt.plot(conf_lower, 'k--')
+plt.plot(conf_upper, 'k--')
 plt.ylabel(r'$q_{6}$')
 plt.xlabel(r'$s_{\max}$')
 if save_files:
     plt.savefig('smax_q6.pdf', bbox_inches='tight')
 plt.figure()
-plt.plot(smax_list, q8)
+plt.plot(smax_list, c_q8.mean(), 'r-')
+conf_lower, conf_upper = c_q8.conf_int(0.95)
+plt.plot(conf_lower, 'k--')
+plt.plot(conf_upper, 'k--')
 plt.ylabel(r'$q_{8}$')
 plt.xlabel(r'$s_{\max}$')
 if save_files:
     plt.savefig('smax_q8.pdf', bbox_inches='tight')
 plt.figure()
-plt.plot(smax_list, q10)
+plt.plot(smax_list, c_q10.mean(), 'r-')
+conf_lower, conf_upper = c_q10.conf_int(0.95)
+plt.plot(conf_lower, 'k--')
+plt.plot(conf_upper, 'k--')
 plt.ylabel(r'$q_{10}$')
 plt.xlabel(r'$s_{\max}$')
 if save_files:
     plt.savefig('smax_q10.pdf', bbox_inches='tight')
 plt.figure()
-plt.plot(smax_list, q12)
+plt.plot(smax_list, c_q12.mean(), 'r-')
+conf_lower, conf_upper = c_q12.conf_int(0.95)
+plt.plot(conf_lower, 'k--')
+plt.plot(conf_upper, 'k--')
 plt.ylabel(r'$q_{12}$')
 plt.xlabel(r'$s_{\max}$')
 if save_files:
