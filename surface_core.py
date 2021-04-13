@@ -20,8 +20,30 @@ class _Surface1D(object):
         self.dx = self.x[1]-self.x[0]
         
     def get_r_grid(self):
-        return np.abs(self.x)    
-    
+        return np.abs(self.x)           
+
+    def get_deta_dx(self, cut_off_kx=None):
+        kx, eta_fft = fft_interface.physical2spectral(self.eta, [self.x])
+        if cut_off_kx is None:
+            cut_off_kx = kx[-1]
+        kx_cut = np.where(np.abs(kx)<cut_off_kx, kx, 0)
+        deta_dx_fft = 1.0j*kx_cut*eta_fft
+        tmp_x, deta_dx = fft_interface.spectral2physical(deta_dx_fft, [kx])
+        return deta_dx   
+
+    def get_local_incidence_surface(self, H, k_cut_off=None, approx=False):
+        deta_dx = self.get_deta_dx(k_cut_off)
+        r = np.abs(self.x)        
+        if approx:
+            n_norm = 1
+            b_norm = r
+            cos_theta_l = (self.x*deta_dx  )/(n_norm*b_norm)
+        else:
+            n_norm = np.sqrt(deta_dx**2 + 1)
+            b_norm = np.sqrt(r**2 + (H-self.eta)**2)
+            cos_theta_l = (self.x*deta_dx + (H-self.eta))/(n_norm*b_norm)
+        theta_l = np.arccos(cos_theta_l)
+        return theta_l   
 
 
 class _Surface2D(object):
@@ -187,6 +209,26 @@ class _Surface2D(object):
         ''' 
         x_inter, y_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x, self.y, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
         return Surface('noName_inter', eta_inter, [x_inter, y_inter]) 
+
+    def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
+        if k_cut_off is None:
+            deta_dx = self.get_deta_dx(None)
+            deta_dy = self.get_deta_dy(None)
+        else:
+            deta_dx = self.get_deta_dx(k_cut_off[0])
+            deta_dy = self.get_deta_dy(k_cut_off[1])
+        r = self.get_r_grid()
+        x_mesh, y_mesh = np.meshgrid(self.x, self.y, indexing='ij')
+        if approx:
+            n_norm = 1
+            b_norm = r
+            cos_theta_l = (x_mesh*deta_dx + y_mesh*deta_dy )/(n_norm*b_norm)
+        else:
+            n_norm = np.sqrt(deta_dx**2 + deta_dy**2 + 1)
+            b_norm = np.sqrt(r**2 + (H-self.eta)**2)
+            cos_theta_l = (x_mesh*deta_dx + y_mesh*deta_dy + (H-self.eta))/(n_norm*b_norm)
+        theta_l = np.arccos(cos_theta_l)
+        return theta_l
         
     def get_geometric_shadowing(self, name, H):
         # TODO: differentiate between kx-ky and k,w
@@ -312,7 +354,7 @@ class _Surface3D(object):
         return Surface(name+'_at_{0:.2f}'.format(self.t[time_index]), self.eta[time_index,:,:], [self.x, self.y])
 
     def get_surf2d_at_ti(self, ti, name):
-        time_index = np.min(np.abs(self.t-ti))
+        time_index = np.argmin(np.abs(self.t-ti))
         return self.get_surf2d_at_index(time_index, name)
 
     def plot_surf2d_at_index(self, time_index, name, flat=True):
@@ -326,6 +368,12 @@ class _Surface3D(object):
         time_index = np.min(np.abs(self.t-ti))
         self.plot_surf2d_at_index(time_index, name, flat)
         
+    def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
+        theta_l = np.zeros(self.eta.shape)
+        for i in range(0, len(self.t)):
+            surf2d = self.get_surf2d_at_ti(self.t[i], '')
+            theta_l[i,:,:] = surf2d.get_local_incidence_angle(H, k_cut_off, approx)
+        return theta_l
 
 
 class Surface(object):
@@ -522,8 +570,8 @@ class Surface(object):
         
     def replace_eta(self, new_eta):
         self.etaND.eta =new_eta
-        
-    def get_local_incidence_surface(self, name, H, k_cut_off=None, approx=False):
+
+    def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
         '''
         Gets the local incidence angle based on the radar elevation H above the mean sea level
         Parameters:
@@ -535,27 +583,23 @@ class Surface(object):
                         True: the local incidence angle is approximated by assuming...
                         False(default): the local incidence angle is calculated exactly
         '''
-        #TODO make all functions available in all dimensions and return 0 if suitable
+        return self.etaND.get_local_incidence_angle(H, k_cut_off, approx)
 
-        if k_cut_off is None:
-            deta_dx = self.get_deta_dx(None)
-            deta_dy = self.get_deta_dy(None)
-        else:
-            deta_dx = self.get_deta_dx(k_cut_off[0])
-            deta_dy = self.get_deta_dy(k_cut_off[1])
-        r = self.get_r_grid()
-        x_mesh, y_mesh = np.meshgrid(self.x, self.y, indexing='ij')
-        if approx:
-            n_norm = 1
-            b_norm = r
-            cos_theta_l = (x_mesh*deta_dx + y_mesh*deta_dy )/(n_norm*b_norm)
-        else:
-            n_norm = np.sqrt(deta_dx**2 + deta_dy**2 + 1)
-            b_norm = np.sqrt(r**2 + (H-self.eta)**2)
-            cos_theta_l = (x_mesh*deta_dx + y_mesh*deta_dy + (H-self.eta))/(n_norm*b_norm)
-        theta_l = np.arccos(cos_theta_l)
-        grid = [self.x, self.y]
-        return Surface(name, theta_l, grid, self.window_applied)
+    def get_local_incidence_surface(self, name, H, k_cut_off=None, approx=False):
+        '''
+        Gets the surface with the local incidence angle based on the radar elevation H above 
+        the mean sea level
+        Parameters:
+        -----------
+        input
+                H       float
+                        height of radar
+                approx  int
+                        True: the local incidence angle is approximated by assuming...
+                        False(default): the local incidence angle is calculated exactly
+        '''
+        theta_l = self.etaND.get_local_incidence_angle(H, k_cut_off, approx)
+        return Surface(name, theta_l, self.grid, self.window_applied)
         
     def get_geometric_shadowing(self, name, H):
         '''

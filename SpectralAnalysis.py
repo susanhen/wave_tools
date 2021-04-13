@@ -1,7 +1,11 @@
 import numpy as np
-from wave_tools import moving_average, surface_core, fft_interface
-from help_tools import plotting_interface
+from wave_tools import moving_average, surface_core, fft_interface, moving_average
+from help_tools import plotting_interface, polar_coordinates
 from radar_tools import dispersion_filter, filter_core
+import functools
+import operator
+import polarTransform
+import scipy
 
 def _symmetrize2d(surf):
     Nx, Ny = surf.shape
@@ -18,23 +22,22 @@ def _symmetrize2d(surf):
 
 
 class _SpectralAnalysis1d(object):
-    def __init__(self, coeffs, spectrum, kx, type, grid_cut_off=None):
+    def __init__(self, coeffs, spectrum, kx, spec_type, grid_cut_off=None):
         '''
         1D specturm, coeffs may be None, typically used for integrated
         subspectra for 2D and 3D spectra
         '''
         self.coeffs = coeffs
         self.spectrum = spectrum
-        if type == 'wavenumber':
+        if spec_type == 'wavenumber':
             self.type = 1
-        elif type == 'frequency':
+        elif spec_type == 'frequency':
             self.type = 0
         else:
-            print('Error: given type is not valid use "wavenumber" or "frequency"!')
-            
+            print('Error: given type is not valid use "wavenumber" or "frequency"!')       
         if type(kx) == list:
-            self.kx = kx[0]
-        else:   
+            self.kx = np.array(functools.reduce(operator.iconcat, kx, []))
+        else:
             self.kx = kx
         self.SAx = self
         self.dkx = abs(self.kx[1]-self.kx[0])
@@ -113,6 +116,7 @@ class _SpectralAnalysis2d(object):
         self.spectrum = spectrum
         self.kx = k[0]
         self.ky = k[1]
+        self.grid_cut_off = grid_cut_off
         if grid_cut_off == None:
             self.x_cut_off = self.kx[-1]
             self.y_cut_off = self.ky[-1]
@@ -147,7 +151,68 @@ class _SpectralAnalysis2d(object):
         extent      tupel of limits (x_lower, x_upper, y_lower, y_upper) #FIXME CHECK if None option is implemented        
         '''
         plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum)  #.plot_k_w_mod2D(self.kx, self.ky, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)  
+
+    def plot_orig_disp_rel(self, w, z, Ux, Uy, h):
+        plotting_interface.plot_disp_rel_at(w, h, z, Ux, Uy, 'w')    
+
+    def plot_disp_rel_kx_ky(self, w, h=1000):
+        #check if there is enough wave energy on the y-axis for this procedure:
+        Ux0, Uy0 = 0, 0
+        spec_max = np.max(self.spectrum)
+        relevant_indices = np.argwhere((self.spectrum).flatten()>0.1*spec_max).T[0,:]
+        kx_mesh, ky_mesh = np.meshgrid(self.kx, self.ky, indexing='ij')
+        kx_rel = kx_mesh.flatten()[relevant_indices]
+        ky_rel = ky_mesh.flatten()[relevant_indices]
+        spec_filt = np.where(self.spectrum>0.3*np.max(self.spectrum), self.spectrum, 0)
+        k, theta, spec_pol = polar_coordinates.cart2finePol(self.kx, self.ky, spec_filt)
+        kk, th = np.meshgrid(k, theta, indexing='ij')
+        k_peak = np.sum(spec_pol * kk, axis=0)/np.sum(spec_pol, axis=0)
+        k_peak2 = (np.sum(spec_pol * kk**2, axis=0)/np.sum(spec_pol, axis=0))**(1./2)
+        k_peak3 = (np.sum(spec_pol * kk**3, axis=0)/np.sum(spec_pol, axis=0))**(1./3)
+
+
+        window_length = 10
+        selected_indices = np.argwhere(k_peak<1)[:,0]
+        k_peak_selected = k_peak[selected_indices]
+        k_peak_selected = np.block([k_peak_selected[0] * np.ones(window_length-1), k_peak_selected, k_peak_selected[-1] * np.ones(window_length-1)])
+        k_peak_smooth = moving_average.moving_average(k_peak_selected, window_length)[window_length-1:-window_length+1]
+
+
+        k_peak_selected2 = k_peak2[selected_indices]
+        k_peak_selected2 = np.block([k_peak_selected2[0] * np.ones(window_length-1), k_peak_selected2, k_peak_selected2[-1] * np.ones(window_length-1)])
+        k_peak_smooth2 = moving_average.moving_average(k_peak_selected2, window_length)[window_length-1:-window_length+1]
+
+
+        k_peak_selected3= k_peak3[selected_indices]
+        k_peak_selected3 = np.block([k_peak_selected3[0] * np.ones(window_length-1), k_peak_selected3, k_peak_selected3[-1] * np.ones(window_length-1)])
+        k_peak_smooth3 = moving_average.moving_average(k_peak_selected3, window_length)[window_length-1:-window_length+1]
         
+        weights = (self.spectrum.flatten()[relevant_indices])**(1./8)
+        max_weight = np.max(weights)
+        weights = np.where(weights>0.1*max_weight, weights, 0)
+
+        def disp_rel(U):
+            Ux, Uy = U
+            #N = (len(x) - 2)//3
+            #weights = x[:N]
+            kx = kx_rel#x[N:2*N]
+            ky = ky_rel#x[2*N:3*N]
+            k = np.sqrt(kx**2 + ky**2)
+            return np.dot(weights, (w - np.sqrt(9.81*k*np.tanh(k*h)) - Ux*kx - Uy*ky)**2)
+
+        opt = scipy.optimize.minimize(disp_rel, [Ux0, Uy0])
+        Ux, Uy = opt.x
+  
+        print('The current was defined to by Ux, Uy = ', Ux, Uy)
+        import pylab as plt
+        plt.plot(k_peak[selected_indices]*np.cos(theta[selected_indices]), k_peak[selected_indices]*np.sin(theta[selected_indices]))
+        plt.plot(k_peak_smooth*np.cos(theta[selected_indices]), k_peak_smooth*np.sin(theta[selected_indices]))
+        plt.plot(k_peak_smooth2*np.cos(theta[selected_indices]), k_peak_smooth2*np.sin(theta[selected_indices]))
+        plt.plot(k_peak_smooth3*np.cos(theta[selected_indices]), k_peak_smooth3*np.sin(theta[selected_indices]))
+        #plt.plot(k_peak2*np.cos(theta), k_peak2*np.sin(theta))
+        #plt.plot(k_peak3*np.cos(theta), k_peak3*np.sin(theta))
+        print('ha')
+
     def get_disp_filtered_spec(self, U, h, filter_width_up, filter_width_down, filter_width_axis, first_axis_k):
         if first_axis_k==True:
             disp_filt = dispersion_filter.k_w_filter(self.Nx, self.Ny, U, h, self.kx, self.ky, filter_width_up, filter_width_down, filter_width_axis, N_fine=2000)                    
@@ -227,7 +292,45 @@ class _SpectralAnalysis2d(object):
     def remove_zeroth(self):
         self.coeffs[self.Nx//2, self.Ny//2] = 0
         self.spectrum[self.Nx//2, self.Ny//2] = 0
-    
+
+    def transform_spectrum_to_polar(self, radiusSize):        
+        #FIXME test function properly
+        x_center_ind = self.Nx//2
+        y_center_ind = self.Ny//2
+        initAngle = 0
+        finAngle = 2*np.pi 
+        spectrum_pol, settings = polarTransform.convertToPolarImage(self.spectrum.swapaxes(0,1),  initialRadius=0, center=[x_center_ind,y_center_ind], initialAngle=initAngle,
+                                                            finalAngle=finAngle, radiusSize=radiusSize)
+        spectrum_pol = spectrum_pol.swapaxes(0,1)    
+        spectrum_pol = np.where(spectrum_pol<0, 0, spectrum_pol)
+        Nr, Ntheta = spectrum_pol.shape
+
+        kx_mesh, ky_mesh = np.meshgrid(self.kx, self.ky, indexing='ij')
+        k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
+        k_max = np.max(k_mesh)
+        dk = k_max/(Nr-1)
+        k = np.arange(0, Nr)*dk
+
+        dtheta = 2*np.pi/(Ntheta-1)
+        theta = np.arange(0, 2*np.pi, dtheta)
+
+        k_pol, sets = polarTransform.convertToPolarImage(k_mesh.swapaxes(0,1), initialRadius=0, center=[x_center_ind, y_center_ind], initialAngle=initAngle, finalAngle = finAngle, radiusSize=radiusSize )
+        k_pol = k_pol.swapaxes(0,1)
+        cut_upper = np.argwhere(k_pol[:,0]>0.3)[0][0]
+        k_out = np.where(np.abs(k_pol[:,0])<0.015, 0, k_pol[:,0])
+        return k_out[:cut_upper], theta, spectrum_pol[:cut_upper,:]
+
+    def integrate_theta(self, radiusSize):
+        k, theta, spectrum_pol = self.transform_spectrum_to_polar(radiusSize)
+        dtheta = theta[1] - theta[0]
+        integrated_spec = dtheta * np.sum(spectrum_pol, axis=1)
+        return k, integrated_spec
+
+    def get_theta_slice(self, at_theta, radiusSize):
+        k, theta, spectrum_pol = self.transform_spectrum_to_polar(radiusSize)
+        at_theta_ind = np.argmin(np.abs(theta- at_theta))
+        return k, spectrum_pol[:,at_theta_ind]
+
         
 class _SpectralAnalysis3d(object):
     def __init__(self, coeffs, spectrum, grid, grid_cut_off=None):
@@ -279,14 +382,101 @@ class _SpectralAnalysis3d(object):
         self.coeffs[self.Nt//2, self.Nx//2, self.Ny//2] = 0
         self.spectrum[self.Nt//2, self.Nx//2, self.Ny//2] = 0  
 
-    def get_w_slice(self, name, window_applied, grid_cut_off):
+    def get_w_slice(self, window_applied, grid_cut_off):
         '''
         spectral objects for all positve (negative???) frequencies
         '''
         spec2d_list = []
         for i in range(self.Nt//2, self.Nt):
-            spec2d_list.append(SpectralAnalysis(name+r'$_\omega_{0:d}$'.format(i), [self.kx, self.ky], window_applied, grid_cut_off))
+            spec2d_list.append(SpectralAnalysis(self.coeffs[i,:,:], self.spectrum[i,:,:], [self.kx, self.ky], window_applied, grid_cut_off))
         return spec2d_list
+
+    def integrate_theta(self, radiusSize):
+        w_k_spec = np.zeros((self.Nt, radiusSize))
+        k = None
+        for i in range(0, self.Nt):
+            spec2d = SpectralAnalysis(self.coeffs[i,:,:], self.spectrum[i,:,:], [self.kx, self.ky])
+            k, integrated_spec = spec2d.integrate_theta()
+            w_k_spec[i,:] = integrated_spec#*k
+        k_w_spec = w_k_spec.T
+        interpol = scipy.interpolate.interp1d(k, k_w_spec, axis=0, kind='cubic')
+        k_fine = np.linspace(0, k[-1], 300)[1:]
+
+
+        def func(x, a, b, c):
+            return a * np.exp(-b * x) + c
+        
+        
+        k_max_inds = np.argmax(interpol(k_fine), axis=0)
+        measured_k1 = k_fine[k_max_inds]
+        max1 = np.max(interpol(k_fine))
+        choose1 = np.argwhere(np.max(interpol(k_fine), axis=0)>0.01*max1)
+        k_max_inds2 = np.argmax(k_w_spec, axis=0)
+        measured_k2 = k[k_max_inds2]
+        max2 = np.max(k_w_spec)
+        choose2 = np.argwhere(np.max(interpol(k_fine), axis=0)>0.01*max2)
+
+        #popt, pcov = scipy.optimize.curve_fit(func, measured_k1[choose1], self.w[choose1])
+
+        import pylab as plt        
+        plotting_interface.plot_3d_as_2d(k_fine, self.w, interpol(k_fine))
+        plt.plot(measured_k1[choose1], self.w[choose1])
+        
+        plt.plot(k_fine, np.sqrt(9.81*k_fine))
+        plt.plot(k_fine, -np.sqrt(9.81*k_fine))
+        #plt.plot(measured_k1[choose1], func(measured_k1[choose1], *popt))
+        plotting_interface.show()
+        plt.figure()
+        plotting_interface.plot_3d_as_2d(k, self.w, k_w_spec)
+        plt.plot(k, np.sqrt(9.81*k)+self.dw)
+        plt.plot(measured_k1[choose1], self.w[choose1], '--')
+        plt.plot(measured_k2[choose2], self.w[choose2], ':')
+        plotting_interface.show()
+
+    def get_k_w_slice_at_peak(self, radiusSize):
+        peak_indices = np.unravel_index(np.argmax(self.spectrum), (self.Nt, self.Nx, self.Ny))
+        at_theta = np.arctan2(peak_indices[2], peak_indices[1])
+        # test ouput... remove large k values
+        spec2d = SpectralAnalysis(self.coeffs[0,:,:], self.spectrum[0,:,:], [self.kx, self.ky])
+        k, test = spec2d.spectrumND.get_theta_slice(0, radiusSize)
+        w_k_spec = np.zeros((self.Nt, len(test)))
+        k = None
+        peak_value = 0
+        for i in range(0, self.Nt):
+            spec2d = SpectralAnalysis(self.coeffs[i,:,:], self.spectrum[i,:,:], [self.kx, self.ky])
+            k, w_k_spec[i,:] = spec2d.spectrumND.get_theta_slice(at_theta, radiusSize)
+        k_w_spec = w_k_spec.T
+        
+        k_fine = np.linspace(0, k[-1], 300)[1:]
+
+                
+        #k_max_inds = np.argmax(interpol(k_fine), axis=0)
+        #measured_k1 = k_fine[k_max_inds]
+        #max1 = np.max(interpol(k_fine))
+        #choose1 = np.argwhere(np.max(interpol(k_fine), axis=0)>0.01*max1)
+        k_max_inds2 = np.argmax(k_w_spec, axis=0)
+        #measured_k2 = k[k_max_inds2]
+        max2 = np.max(k_w_spec)
+        #choose2 = np.argwhere(np.max(interpol(k_fine), axis=0)>0.01*max2)
+
+        #popt, pcov = scipy.optimize.curve_fit(func, measured_k1[choose1], self.w[choose1])
+
+        import pylab as plt        
+        #plotting_interface.plot_3d_as_2d(k_fine, self.w, interpol(k_fine))
+        #plt.plot(measured_k1[choose1], self.w[choose1])
+        
+        #plt.plot(k_fine, np.sqrt(9.81*k_fine))
+        #plt.plot(k_fine, -np.sqrt(9.81*k_fine))
+        #plt.plot(measured_k1[choose1], func(measured_k1[choose1], *popt))
+        #plotting_interface.show()
+
+        plotting_interface.plot_3d_as_2d(k, self.w, k_w_spec)
+        plt.plot(k, np.sqrt(9.81*k))
+        plt.plot(k, -np.sqrt(9.81*k))
+        #plt.plot(measured_k1[choose1], self.w[choose1], '--')
+        #plt.plot(measured_k2[choose2], self.w[choose2], ':')
+        plotting_interface.show()
+
 
     def invert(self, name, grid_offset, window_applied):    
         '''
@@ -303,7 +493,7 @@ class SpectralAnalysis(object):
     '''
     Class for Analysis 1d, 2d and 3d spectra over a uniform grid.    
     '''
-    def __init__(self, coeffs, spectrum, axes_grid, type='wavenumber', window_applied=False, grid_cut_off=None):
+    def __init__(self, coeffs, spectrum, axes_grid, spec_type='wavenumber', window_applied=False, grid_cut_off=None):
         '''
         Parameters:
         ----------
@@ -314,7 +504,7 @@ class SpectralAnalysis(object):
                                 spectrum in 1d, 2d, 3d
                 axis_grid       list of arrays defining grid for each given axis
 
-                type            string
+                spec_type       string
                                 only meaningful for 1d spectrum... default: 'wavenumber', 
                                 can be set to 'frequency'
         '''
@@ -323,7 +513,7 @@ class SpectralAnalysis(object):
         self.window_applied = window_applied
         if len(spectrum.shape)==1:
             self.ND = 1
-            self.spectrumND = _SpectralAnalysis1d(coeffs, spectrum, axes_grid, type, grid_cut_off)
+            self.spectrumND = _SpectralAnalysis1d(coeffs, spectrum, axes_grid, spec_type, grid_cut_off)
             self.kx = self.spectrumND.kx
         elif len(spectrum.shape)==2:
             self.ND = 2        
@@ -338,7 +528,7 @@ class SpectralAnalysis(object):
             self.kx = self.spectrumND.kx
             self.ky = self.spectrumND.ky
         else:
-            print('\n\nError: Input data spectrum is not of the correct type\n\n')
+            print('\n\nError: Input data spectrum is not of the correct spec_type\n\n')
         
     def get_S(self, mov_av=1):
         '''
@@ -448,6 +638,13 @@ class SpectralAnalysis(object):
             self.spectrumND.plot()#fn, waterdepth, extent, U, dB, vmin, save)
         elif self.ND==3:
             self.spectrumND.plot()#fn, waterdepth, extent, U, dB, vmin, save)  
+
+    def plot_orig_disp_rel(self, w, z, Ux, Uy, h):
+        self.spectrumND.plot_orig_disp_rel(w, z, Ux, Uy, h)
+
+    def plot_disp_rel_kx_ky(self, w, h):
+        if self.ND==2:
+            self.spectrumND.plot_disp_rel_kx_ky(w, h=h)
             
     def get_disp_filtered_spec(self, U, h, filter_width_up=1, filter_width_down=1, filter_width_axis=0, first_axis_k=True):
         '''
@@ -474,7 +671,49 @@ class SpectralAnalysis(object):
             return self.spectrumND.get_2d_MTF(grid_offset)  
     def apply_MTF(self, grid_offset):
         self.spectrumND.apply_MTF(grid_offset)
+
+    def get_w_slice(self):
+        if self.ND == 3:
+            return self.spectrumND.get_w_slice(self.window_applied, self.grid_cut_off)
+        else:
+            print('Error: get_w_slice is not implemented for dimensions lower than 3D')
+
+    def get_theta_slice(self, theta_ind):
+        radiusSize = int(np.sqrt(self.spectrumND.Nx**2 + self.spectrumND.Ny**2))
+        if self.ND ==2:
+            return self.spectrumND.get_theta_slice(theta_ind, radiusSize)    
+        if self.ND ==3:
+            print('Error: Not yet implemented!')
+        if self.ND ==1:
+            print('Error: The method is supported for 1D')
+
+    def integrate_theta(self):
+        radiusSize = int(np.sqrt(self.spectrumND.Nx**2 + self.spectrumND.Ny**2))
+        if self.ND ==2:
+            return self.spectrumND.integrate_theta(radiusSize)
+        if self.ND ==3:
+            return self.spectrumND.integrate_theta(radiusSize)
+        else:
+            print('Error: integrate_theta is not implemented for dimensions lower than 2D')
+
+    def get_transform_spectrum_to_polar(self):
+        radiusSize = int(np.sqrt(self.spectrumND.Nx**2 + self.spectrumND.Ny**2))
+        if self.ND ==2:
+            return self.spectrumND.get_transform_spectrum_to_polar(radiusSize)
+        elif self.ND ==3:
+            print('Error: Not implemented')
+        else:
+            print('Error: get_transform_to_polar not implemented for dimensions lower than 2D')
         
+
+    def get_k_w_slice_at_peak(self):
+        radiusSize = int(np.sqrt(self.spectrumND.Nx**2 + self.spectrumND.Ny**2))
+        if self.ND == 3:
+            return self.spectrumND.get_k_w_slice_at_peak(radiusSize)
+        else:
+            print('Error: get_k_w_slice is not implemented for dimensions lower than 2D')
+
+
     def invert(self, name, grid_offset=None):
         '''
         Return a surface object with the inverted surface and the corresponding grid
