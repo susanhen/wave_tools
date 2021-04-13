@@ -127,8 +127,32 @@ def JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax):
     return surface_core.Surface('jonswap', eta, [x, y])
 
 
+def JonswapWave2D_asymetric(x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h=1000):
+    g = 9.81
+    Nx = len(x)
+    Ny = len(y)
+    dk = 0.005
+    k = np.arange(0.01, 0.35, dk)
+    dtheta=0.05
+    theta=np.arange(-np.pi, np.pi, dtheta)
+    Nk = len(k)
+    Ntheta = len(theta)
+    kp=2*np.pi*Alpha/Hs
+    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
+    D = spreading.asymmetric_spreading(k, kp, theta, theta_mean, smax, mu)
+    a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
+    xx, yy = np.meshgrid(x, y, indexing='ij')
+    kk, th = np.meshgrid(k, theta, indexing='ij')
+    ascale1 = np.random.rand(Nk, Ntheta)*2 - 1
+    ascale2 = np.random.rand(Nk, Ntheta)*2 - 1
+    a1 = (ascale1*a_mean).flatten()
+    a2 = (ascale2*a_mean).flatten()
+    eta = np.zeros((Nx, Ny))
+    phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten()) 
+    eta = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
+    return surface_core.Surface('jonswap', eta, [x, y]) 
+
 def JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
-    # TODO adapt for incorporating current profile
     g = 9.81
     Nt = len(t)
     Nx = len(x)
@@ -154,7 +178,75 @@ def JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
     for i in range(0, Nt):
         phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten()) - np.outer(t[i]*ww, np.ones(Nx*Ny))
         eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
-    return surface_core.Surface('jonswap', eta, [t, x, y])    
+    return surface_core.Surface('jonswap', eta, [t, x, y]) 
+
+def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, Ux, Uy):
+    g = 9.81
+    Nt = len(t)
+    Nx = len(x)
+    Ny = len(y)
+    dk = 0.005
+    k = np.arange(0.01, 0.35, dk)
+    dtheta=0.05
+    theta=np.arange(-np.pi, np.pi, dtheta)
+    Nk = len(k)
+    Ntheta = len(theta)
+    kp=2*np.pi*Alpha/Hs
+    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
+    D = spreading.mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax)
+    a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
+    xx, yy = np.meshgrid(x, y, indexing='ij')
+    kk, th = np.meshgrid(k, theta, indexing='ij')
+    Uxk = 2*kk*np.sum(Ux*np.exp(np.outer(2*kk,z)), axis=1).reshape(kk.shape)
+    Uyk = 2*kk*np.sum(Uy*np.exp(np.outer(2*kk,z)), axis=1).reshape(kk.shape)
+    # TODO: write a test for this program... just visualize the dispersion relation
+    ww = kk*(np.cos(th)*Uxk + np.sin(th)*Uyk) + np.sqrt(kk*g*np.tanh(kk*h))
+    kx = kk*np.cos(th)
+    ky = kk*np.sin(th)
+    import matplotlib.pyplot as plt 
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure()
+    axes = fig.gca(projection='3d')
+    axes.plot_surface(kx, ky, ww)
+    plt.show()
+    ascale1 = np.random.rand(Nk, Ntheta)*2 - 1
+    ascale2 = np.random.rand(Nk, Ntheta)*2 - 1
+    a1 = (ascale1*a_mean).flatten()
+    a2 = (ascale2*a_mean).flatten()
+    eta = np.zeros((Nt, Nx, Ny))
+    for i in range(0, Nt):
+        phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten()) - np.outer(t[i]*ww, np.ones(Nx*Ny))
+        eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
+    return surface_core.Surface('jonswap', eta, [t, x, y]) 
+
+def JonswapWave3D_asymetric(t, x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h=1000):
+    g = 9.81
+    Nt = len(t)
+    Nx = len(x)
+    Ny = len(y)
+    dk = 0.005
+    k = np.arange(0.01, 0.35, dk)
+    dtheta=0.05
+    theta=np.arange(-np.pi, np.pi, dtheta)
+    Nk = len(k)
+    Ntheta = len(theta)
+    kp=2*np.pi*Alpha/Hs
+    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
+    D = spreading.asymmetric_spreading(k, kp, theta, theta_mean, smax, mu)
+    a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
+    xx, yy = np.meshgrid(x, y, indexing='ij')
+    kk, th = np.meshgrid(k, theta, indexing='ij')
+    ww = np.sqrt(kk*g*np.tanh(kk*h))
+    ascale1 = np.random.rand(Nk, Ntheta)*2 - 1
+    ascale2 = np.random.rand(Nk, Ntheta)*2 - 1
+    a1 = (ascale1*a_mean).flatten()
+    a2 = (ascale2*a_mean).flatten()
+    eta = np.zeros((Nt, Nx, Ny))
+    for i in range(0, Nt):
+        phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten()) - np.outer(t[i]*ww, np.ones(Nx*Ny))
+        eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
+    return surface_core.Surface('jonswap', eta, [t, x, y]) 
+
 
 class DirectionalSpectrum:
     def __init__(self, Tp, theta_p, gam, c, F):
@@ -416,16 +508,23 @@ if __name__=='__main__':
     dx = 7.5
     dy = 7.5
     dt = 1.
+    h = 1000
     t = np.arange(0, 5, dt)
     x = np.arange(-250, 250, dx)
     y = np.arange(500, 1000, dy)
-    surf3d = JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000)
-    #surf2d.
+    #surf3d = JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h)
+    z = np.linspace(-100,0,100)
+    Ux = 0.5*np.exp(5*z)
+    Uy = 0
+    surf3d = JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, Ux, Uy)
     surf3d.plot_3d_as_2d(0)
 
-    surf3d.plot_3d_as_2d(1)
-
-    surf3d.plot_3d_as_2d(2)
+    # asymmetric Jonswap
+    '''
+    mu = -0.28
+    surf3d_asym = JonswapWave3D_asymetric(t, x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h)
+    surf3d_asym.plot_3d_as_2d(0)
+    '''
 
     plt.show()
 
