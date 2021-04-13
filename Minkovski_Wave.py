@@ -18,101 +18,52 @@ x = np.arange(-250, 250, dx)
 y = np.arange(500, 1000, dy)
 Alpha = 0.023
 gamma = 3.3
+mu = 0.5
 theta_mean = np.pi/2 - 10*np.pi/180
 save_files = True
-N_parameters = 100
-N_cases = 100
+N_parameters = 20
+N_cases = 10
 smax_list = np.linspace(1, 100, N_parameters)
 
-c_q2 = confidence.Container((N_cases, N_parameters))
-c_q4 = confidence.Container((N_cases, N_parameters))
-c_q6 = confidence.Container((N_cases, N_parameters))
-c_q8 = confidence.Container((N_cases, N_parameters))
-c_q10 = confidence.Container((N_cases, N_parameters))
-c_q12 = confidence.Container((N_cases, N_parameters))
 
+def define_container_dict(q_list, N_cases, N_parameters):
+    container_dict = {}
+    for q in q_list:
+        container_dict[q] = confidence.Container((N_cases, N_parameters))
+    return container_dict
+
+def add_case_at_all_qs(container_dict, minkval, q_list, k):
+    for q in q_list:
+        container_dict[q].add_case_at(minkval[q], k)
+
+def plot_all(container_dict, q_list, smax_list, q_labels, save_files):
+    for q in q_list:
+        plt.figure()
+        plt.plot(smax_list, container_dict[q].mean(), 'r-')
+        conf_lower, conf_upper = container_dict[q].conf_int(0.9)
+        plt.plot(smax_list, conf_lower, 'k--')
+        plt.plot(smax_list, conf_upper, 'k--')
+        plt.ylabel(q_labels[q])
+        plt.xlabel(r'$s_{\max}$')
+        if save_files:
+            plt.savefig('smax_mu+05_{0:s}.pdf'.format(q), bbox_inches='tight')
+
+q_list = ['q2', 'q3', 'q4', 'q5', 'q6', 'q7','q8', 'q9', 'q10','q11', 'q12']
+q_labels = {'q2':r'$q_{2}$', 'q3':r'$q_{3}$', 'q4':r'$q_{4}$', 'q5':r'$q_{5}$', 'q6':r'$q_{6}$', 'q7':r'$q_{7}$', 'q8':r'$q_{8}$', 'q9':r'$q_{9}$', 'q10':r'$q_{10}$', 'q11':r'$q_{11}$', 'q12':r'$q_{12}$'}
+container_dict = define_container_dict(q_list, N_cases, N_parameters)
 
 
 for k in range(0, N_parameters):
     smax = smax_list[k]
     print('processing for surface for smax {0:.0f} final smax will be {1:.0f}'.format(smax, smax_list[-1]))
     for i in range(0, N_cases):
-        surf2d = ConstructWave.JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
+        #surf2d = ConstructWave.JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
+        surf2d = ConstructWave.JonswapWave2D_asymetric(x, y, Hs, Alpha, gamma, theta_mean, smax, mu)
         minkval = pypaya2.imt_for_image(surf2d.eta, threshold=0)
-        c_q2.add_case_at(minkval['q2'], k)
-        c_q4.add_case_at(minkval['q4'], k)
-        c_q6.add_case_at(minkval['q6'], k)
-        c_q8.add_case_at(minkval['q8'], k)
-        c_q10.add_case_at(minkval['q10'], k)
-        c_q12.add_case_at(minkval['q12'], k)
+        add_case_at_all_qs(container_dict, minkval, q_list, k)
 
 
-        #surf2d.plot_3d_as_2d()
-        '''
-        #plotting_interface.plot_3d_surface(x, y, eta2d)
-        minkval = pypaya2.imt_for_image(surf2d.eta, threshold=0)
-        q2.append(minkval['q2'])
-        q4.append(minkval['q4'])
-        q6.append(minkval['q6'])
-        q8.append(minkval['q8'])
-        q10.append(minkval['q10'])
-        q12.append(minkval['q12'])
-        '''
-
-plt.figure()
-plt.plot(smax_list, c_q2.mean(), 'r-')
-conf_lower, conf_upper = c_q2.conf_int(0.95)
-plt.plot(conf_lower, 'k--')
-plt.plot(conf_upper, 'k--')
-plt.ylabel(r'$q_{2}$')
-plt.xlabel(r'$s_{\max}$')
-if save_files:
-    plt.savefig('smax_q2.pdf', bbox_inches='tight')
-plt.figure()
-plt.plot(smax_list, c_q4.mean(), 'r-')
-conf_lower, conf_upper = c_q4.conf_int(0.95)
-plt.plot(conf_lower, 'k--')
-plt.plot(conf_upper, 'k--')
-plt.ylabel(r'$q_{4}$')
-plt.xlabel(r'$s_{\max}$')
-if save_files:
-    plt.savefig('smax_q4.pdf', bbox_inches='tight')
-plt.figure()
-plt.plot(smax_list, c_q6.mean(), 'r-')
-conf_lower, conf_upper = c_q6.conf_int(0.95)
-plt.plot(conf_lower, 'k--')
-plt.plot(conf_upper, 'k--')
-plt.ylabel(r'$q_{6}$')
-plt.xlabel(r'$s_{\max}$')
-if save_files:
-    plt.savefig('smax_q6.pdf', bbox_inches='tight')
-plt.figure()
-plt.plot(smax_list, c_q8.mean(), 'r-')
-conf_lower, conf_upper = c_q8.conf_int(0.95)
-plt.plot(conf_lower, 'k--')
-plt.plot(conf_upper, 'k--')
-plt.ylabel(r'$q_{8}$')
-plt.xlabel(r'$s_{\max}$')
-if save_files:
-    plt.savefig('smax_q8.pdf', bbox_inches='tight')
-plt.figure()
-plt.plot(smax_list, c_q10.mean(), 'r-')
-conf_lower, conf_upper = c_q10.conf_int(0.95)
-plt.plot(conf_lower, 'k--')
-plt.plot(conf_upper, 'k--')
-plt.ylabel(r'$q_{10}$')
-plt.xlabel(r'$s_{\max}$')
-if save_files:
-    plt.savefig('smax_q10.pdf', bbox_inches='tight')
-plt.figure()
-plt.plot(smax_list, c_q12.mean(), 'r-')
-conf_lower, conf_upper = c_q12.conf_int(0.95)
-plt.plot(conf_lower, 'k--')
-plt.plot(conf_upper, 'k--')
-plt.ylabel(r'$q_{12}$')
-plt.xlabel(r'$s_{\max}$')
-if save_files:
-    plt.savefig('smax_q12.pdf', bbox_inches='tight')
+plot_all(container_dict, q_list, smax_list, q_labels, save_files)
 plt.show()
 #'''
 '''
