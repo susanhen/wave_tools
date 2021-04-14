@@ -78,6 +78,19 @@ def mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax):
     D /= np.outer(np.sum(np.gradient(th, axis=1)*D, axis=1), np.ones(len(theta)))    
     return D
 
+def asymmetric_spreading(k, kp, theta, theta_mean, smax, mu):
+    kk, th = np.meshgrid(k, theta, indexing='ij')
+    s = np.where(kk<=kp, smax * (np.sqrt(kk/kp))**5, smax * (np.sqrt(kk/kp))**(-2.5))
+    xeta = np.where(th<theta_mean, np.exp(mu), np.exp(-mu))
+    th_min = theta_mean - (2*np.pi)/(1+np.exp(2*mu))
+    th_max = theta_mean + (2*np.pi)/(1+np.exp(-2*mu))
+    ind_min = np.argmin(np.abs(theta-th_min))
+    ind_max = np.argmin(np.abs(theta-th_max))
+    G0a_inv = np.trapz( ((np.cos((th[:,ind_min:ind_max+1]-theta_mean)/2*xeta[:,ind_min:ind_max+1]))**2)**s[:,ind_min:ind_max+1], theta[ind_min:ind_max+1], axis=1)
+    G0a = np.outer(1./G0a_inv, np.ones(len(theta)))
+    Ga = ((np.cos((th-theta_mean)/2*xeta))**2)**s * G0a
+    return Ga
+
 if __name__=='__main__':
     import pylab as plt
     from wave_tools import jonswap as j
@@ -106,10 +119,16 @@ if __name__=='__main__':
     plt.imshow(D)
     plt.show()
     '''
+    # Mitsuyatsu distribution
     k = np.arange(0.01, 0.35, 0.005)
     theta = np.linspace(-np.pi, np.pi, 100)
     Alpha = 0.023
     kp = 2*np.pi*Alpha/Hs
     D = mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax)
+    plotting_interface.plot_3d_as_2d(k*10, theta, D)
+
+    # asymmetric distribution
+    mu = -0.28
+    D = asymmetric_spreading(k, kp, theta, theta_mean, smax, mu)
     plotting_interface.plot_3d_as_2d(k*10, theta, D)
     plotting_interface.show()

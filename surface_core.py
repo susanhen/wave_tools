@@ -2,7 +2,7 @@ import numpy as np
 from wave_tools import find_peaks, find_freak_waves, fft_interface, SpectralAnalysis, fft_interpolate
 import pylab as plt
 import polarTransform
-from help_tools import plotting_interface
+from help_tools import plotting_interface, polar_coordinates
 import h5py
 
 class _Surface1D(object):
@@ -31,7 +31,7 @@ class _Surface1D(object):
         tmp_x, deta_dx = fft_interface.spectral2physical(deta_dx_fft, [kx])
         return deta_dx   
 
-    def get_local_incidence_surface(self, H, k_cut_off=None, approx=False):
+    def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
         deta_dx = self.get_deta_dx(k_cut_off)
         r = np.abs(self.x)        
         if approx:
@@ -44,6 +44,16 @@ class _Surface1D(object):
             cos_theta_l = (self.x*deta_dx + (H-self.eta))/(n_norm*b_norm)
         theta_l = np.arccos(cos_theta_l)
         return theta_l   
+
+            
+    def get_illumination_function(self, H):
+        # Assuming that dimension is along the radar beam
+        r = np.abs(self.x)
+        radar_point_angle = np.arctan2(r, (H - self.eta))        
+        illumination = np.ones(r.shape)
+        for i in range(0,self.N-1): 
+            illumination[i+1:,:] *= radar_point_angle[i,:] < radar_point_angle[i+1:,:] 
+        return illumination              
 
 
 class _Surface2D(object):
@@ -230,11 +240,12 @@ class _Surface2D(object):
         theta_l = np.arccos(cos_theta_l)
         return theta_l
         
-    def get_geometric_shadowing(self, name, H):
+    def get_geometric_shadowing(self, H):
         # TODO: differentiate between kx-ky and k,w
         # create polar image
         # improve check for x grid and y grid!
         # Extension needed so that antenna position is in the image
+        '''
         if self.x[0]<=0:
             x_all = self.x
         else:
@@ -243,6 +254,7 @@ class _Surface2D(object):
             y_all = self.y
         else:
             y_all = np.arange(0, self.y[-1]+self.dy, self.dy)
+
         x_mesh, y_mesh = np.meshgrid(x_all, y_all, indexing='ij')
         r_mesh = np.sqrt(x_mesh**2 + y_mesh**2)
         theta_mesh = np.arctan2(y_mesh, x_mesh)
@@ -259,10 +271,10 @@ class _Surface2D(object):
 
         eta_pol, settings = polarTransform.convertToPolarImage(eta_all.swapaxes(0,1),  initialRadius=0, center=[x_center_ind,y_center_ind], initialAngle=initAngle,
                                                             finalAngle=finAngle, radiusSize=radiusSize)
-        eta_pol = eta_pol.swapaxes(0,1)        
+        eta_pol = eta_pol.swapaxes(0,1)   
         
-        # calculate shadowing for each angle
-        #'''
+        
+    
         Nr, Ntheta = eta_pol.shape
         theta0 = settings.initialAngle
         thetaN = settings.finalAngle
@@ -271,10 +283,16 @@ class _Surface2D(object):
         r = np.linspace(r0, rN, Nr, endpoint=True)
         theta = np.linspace(theta0, thetaN, Ntheta, endpoint=True)
         #plotting_interface.plot_3d_as_2d(r, theta*180/np.pi, eta_pol)
-     
+        '''
 
+
+        # second approach
+        r, theta, eta_pol = polar_coordinates.cart2finePol(self.x, self.y, self.eta)
+     
+        # calculate shadowing for each angle
         r_pol, theta_pol = np.meshgrid(r, theta, indexing='ij')#NOTE: ??? changed? opposite indexing to match with polarTransform
         radar_point_angle = r_pol/(H - eta_pol)#np.arctan2(r_pol, (H - eta_pol))
+
         illumination = np.ones(eta_pol.shape, dtype=int)
         for i in range(1,10):
             illumination[i:, :] *= ((radar_point_angle[:-i, :] - radar_point_angle[i:, :])*180/np.pi < 0).astype('int')
@@ -293,13 +311,27 @@ class _Surface2D(object):
         plt.plot(eta_pol[:,240])
         plt.show()
         '''
+        '''
+        #revert mapping 1
         #eta_cart, settings = polarTransform.convertToCartesianImage(eta_pol.swapaxes(0,1), center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
         illu_cart, settings = polarTransform.convertToCartesianImage(illumination.swapaxes(0,1), center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
         illu_cart = illu_cart.swapaxes(0,1)
+        illu_cart = illu_cart[-self.Nx:,-self.Ny:]
         plotting_interface.plot_3d_as_2d(x_all, y_all, illu_cart)
-        return illu_cart[-self.Nx:,-self.Ny:]
+        '''
+        # revert mapping2
+        illu_cart = polar_coordinates.averagePol2cart(r, theta, illumination, self.x, self.y)
+        illu_cart = illu_cart.round().astype(int)
+
+        #plotting_interface.plot_3d_as_2d(self.x, self.y, illu_cart)
+        #plotting_interface.show()
+        
+        return illu_cart
+
+    def get_illumination_function(self, H):
+        return self.get_geometric_shadowing(H)
             
-    def get_illuminated_surface(self, name, H, axis=0):
+    def get_illumination_function_w_k(self, H, axis=0):
         if axis==0:
             r = np.outer(self.x, np.ones(self.Ny))  
             radar_point_angle = np.arctan2(r, (H - self.eta))
@@ -311,8 +343,7 @@ class _Surface2D(object):
             illumination[i+1:,:] *= radar_point_angle[i,:] < radar_point_angle[i+1:,:] 
         if axis==1:
             illumination = illumination.transpose()
-
-        return Surface(name, illumination*self.eta.copy(), [self.x, self.y])
+        return illumination       
 
 
 class _Surface3D(object):
@@ -371,9 +402,16 @@ class _Surface3D(object):
     def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
         theta_l = np.zeros(self.eta.shape)
         for i in range(0, len(self.t)):
-            surf2d = self.get_surf2d_at_ti(self.t[i], '')
+            surf2d = self.get_surf2d_at_index(i, '')
             theta_l[i,:,:] = surf2d.get_local_incidence_angle(H, k_cut_off, approx)
         return theta_l
+
+    def get_illumination_function(self, H):
+        illumination = np.zeros(self.eta.shape)
+        for i in range(0, self.Nt):
+            surf2d = self.get_surf2d_at_index(i, '')
+            illumination[i,:,:] = surf2d.get_illumination_function(H)
+        return illumination
 
 
 class Surface(object):
@@ -615,8 +653,21 @@ class Surface(object):
                         define range axis      
         '''
         return Surface(name, self.etaND.get_geometric_shadowing(name, H), self.grid, self.window_applied)    
-        
-    def get_illuminated_surface(self, name, H, axis=0):
+
+    def get_illumination_function(self, H):
+        '''
+        Return illumination function (shadows=0), where shadowing is 
+        calculated along given axis
+        Parameters:
+        -----------
+        input
+                H       float
+                        height of radar
+        '''
+        return self.etaND.get_illumination_function(H)
+
+
+    def get_illuminated_surface(self, name, H):
         '''
         Return illuminated surface (shadows=0), where shadowing is 
         calculated along given axis
@@ -626,11 +677,15 @@ class Surface(object):
                 name    string
                         define name for shadwoing mask object
                 H       float
-                        height of radar
-                axis    int
-                        define range axis      
+                        height of radar   
         '''
-        return self.etaND.get_illuminated_surface(name, H, axis)            
+        illumination_function = self.etaND.get_illumination_function(H)     
+        return Surface(name, illumination_function*self.eta.copy(), self.grid)  
+
+    def get_local_incidence_angle_with_shadowing_surface(self, name, H, k_cut_off=None, approx=False):
+        theta_l = self.etaND.get_local_incidence_angle(H, k_cut_off, approx)
+        illumination_function = self.etaND.get_illumination_function(H) 
+        return Surface(name, illumination_function*theta_l, self.grid)  
         
     def eta_at_xi(self, xi, y_sub=None, z_sub=None):
         if self.ND==2:
