@@ -719,6 +719,37 @@ class Surface(object):
 
     def save(self, fn):
         self.etaND.save(fn, self.name, self.window_applied)
+
+    def add_illumination_to_file(self, fn, H):
+        '''calculate illumination function and add it to file'''
+        hf = h5py.File(fn, 'a')
+        illumination = self.get_illumination_function(H)
+        hf.create_dataset('illumination_{0:d}'.format(H), data=illumination)
+        hf.close()
+
+    def add_local_incidence_angle_to_file(self, fn, H, k_cut_off, approx=False):
+        '''calculate local incidence angle and add it to file'''
+        hf = h5py.File(fn, 'a')
+        loc_inc = self.get_local_incidence_angle(H, k_cut_off, approx)
+        hf.create_dataset('loc_inc_{0:d}'.format(H), data=loc_inc) 
+        hf.close()  
+
+    def add_current_to_file(self, fn, z, U, psi):
+        hf = h5py.File(fn, 'a')
+        hf.create_dataset('z', data=z)
+        hf.create_dataset('U', data=U)
+        hf.create_dataset('psi', data=psi)
+        hf.close()
+
+    def add_wave_parameters_to_file(self, fn, Hs, lambda_p, gamma, theta_mean, smax, h):
+        hf = h5py.File(fn, 'a')
+        hf.attrs['Hs'] = Hs
+        hf.attrs['lambda_p'] = lambda_p
+        hf.attrs['gamma'] = gamma
+        hf.attrs['theta_mean'] = theta_mean
+        hf.attrs['smax'] = smax
+        hf.attrs['h'] = h
+        hf.close()
         
 
 
@@ -742,6 +773,69 @@ def surface_from_file(fn):
         y = np.array(hf.get('y') )
         grid = [t, x, y]
     return Surface(name, eta, grid, window_applied)
+
+def illumination_from_file(fn, H):
+    '''
+    Read illumination from file and create instance surface from file
+    '''  
+    hf = h5py.File(fn, 'r')
+    name = hf.attrs['name']
+    window_applied = hf.attrs['window_applied']
+    eta = np.array(hf.get('illumination_{0:d}'.format(H)))
+    ND = hf.attrs['ND']
+    x = np.array(hf.get('x'))
+    if ND == 1:
+        grid = [x]
+    elif ND==2:
+        y = np.array(hf.get('y') )
+        grid = [x, y]
+    elif ND==3:
+        t = np.array(hf.get('t'))
+        y = np.array(hf.get('y') )
+        grid = [t, x, y]
+    return Surface('illumination_{0:d}'.format(H)+name, eta, grid, window_applied)
+
+
+def local_incidence_angle_from_file(fn, H):
+    '''
+    Read local incidence from file and create instance surface from file
+    '''  
+    hf = h5py.File(fn, 'r')
+    name = hf.attrs['name']
+    window_applied = hf.attrs['window_applied']
+    eta = np.array(hf.get('loc_inc_{0:d}'.format(H)))
+    ND = hf.attrs['ND']
+    x = np.array(hf.get('x'))
+    if ND == 1:
+        grid = [x]
+    elif ND==2:
+        y = np.array(hf.get('y') )
+        grid = [x, y]
+    elif ND==3:
+        t = np.array(hf.get('t'))
+        y = np.array(hf.get('y') )
+        grid = [t, x, y]
+    hf.close()
+    return Surface('loc_inc_{0:d}'.format(H)+name, eta, grid, window_applied)
+
+def current_from_file(fn):
+    hf = h5py.File(fn, 'r')
+    z = hf.get('z')
+    Ux = hf.get('U')
+    Uy = hf.get('psi')
+    hf.close()
+    return z, Ux, Uy
+
+def wave_parameters_from_file(fn):
+    hf = h5py.File(fn, 'r')
+    Hs = hf.attrs['Hs']
+    lambda_p = hf.attrs['lambda_p']
+    gamma = hf.attrs['gamma']
+    theta_mean = hf.attrs['theta_mean']
+    smax = hf.attrs['smax']
+    h = hf.attrs['h']
+    hf.close()
+    return Hs, lambda_p, gamma, theta_mean, smax, h
 
         
 def plot_surfaces2d(list_of_surfaces, xi, yi, y_sub=None, x_sub=None):

@@ -142,7 +142,7 @@ class _SpectralAnalysis2d(object):
         '''
         return self.kx, self.ky, self.coeffs.copy()  
         
-    def plot(self):#, waterdepth, extent, U, dB=True, vmin=-60):
+    def plot(self, extent):# dB=True, vmin=-60):
         '''
         Parameters:
         -----------
@@ -150,10 +150,22 @@ class _SpectralAnalysis2d(object):
         waterdepth  used when defining dispersion relation. If unkonw maybe set to high value #FIXME do this internally and option to set NONE or is there?
         extent      tupel of limits (x_lower, x_upper, y_lower, y_upper) #FIXME CHECK if None option is implemented        
         '''
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum)  #.plot_k_w_mod2D(self.kx, self.ky, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)  
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum, extent=extent)  #.plot_k_w_mod2D(self.kx, self.ky, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)        
 
-    def plot_orig_disp_rel(self, w, z, Ux, Uy, h):
-        plotting_interface.plot_disp_rel_at(w, h, z, Ux, Uy, 'w')    
+    def get_sub_spectrum(self, kx_min, kx_max, ky_min, ky_max):
+        kx_min_ind = np.argwhere(self.kx > kx_min)[0][0]
+        kx_max_ind = np.argwhere(self.kx > kx_max)[0][0]
+        ky_min_ind = np.argwhere(self.ky > ky_min)[0][0]
+        ky_max_ind = np.argwhere(self.ky > ky_max)[0][0]
+        kx_new = self.kx[kx_min_ind: kx_max_ind]
+        ky_new = self.ky[ky_min_ind: ky_max_ind]
+        return kx_new, ky_new, self.spectrum[kx_min_ind:kx_max_ind, ky_min_ind:ky_max_ind]
+
+    def plot_orig_disp_rel(self, w, z, Ux, Uy, h, extent=None):
+        plotting_interface.plot_disp_rel_at(w, h, z, Ux, Uy, 'w', extent)  
+
+    def plot_0current_disp_rel(self, w, h, extent=None):
+        plotting_interface.plot_disp_rel_at(w, h, 0, 0, 0, 'r', extent)
 
     def plot_disp_rel_kx_ky(self, w, h=1000):
         #check if there is enough wave energy on the y-axis for this procedure:
@@ -163,7 +175,9 @@ class _SpectralAnalysis2d(object):
         kx_mesh, ky_mesh = np.meshgrid(self.kx, self.ky, indexing='ij')
         kx_rel = kx_mesh.flatten()[relevant_indices]
         ky_rel = ky_mesh.flatten()[relevant_indices]
-        spec_filt = np.where(self.spectrum>0.3*np.max(self.spectrum), self.spectrum, 0)
+        k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
+        spec_filt0 = np.where(np.abs(np.sqrt(k_mesh*9.81*np.tanh(k_mesh*h))-w)<0.2, self.spectrum, 0)
+        spec_filt = np.where(spec_filt0>0.3*np.max(spec_filt0), spec_filt0, 0)
         k, theta, spec_pol = polar_coordinates.cart2finePol(self.kx, self.ky, spec_filt)
         kk, th = np.meshgrid(k, theta, indexing='ij')
         k_peak = np.sum(spec_pol * kk, axis=0)/np.sum(spec_pol, axis=0)
@@ -367,16 +381,12 @@ class _SpectralAnalysis3d(object):
         '''
         return self.w, self.kx, self.ky, self.coeffs.copy()   
 
-    def plot(self,fn=None, waterdepth=None, extent=None, U=None, dB=None, vmin=None, save=False):
+    def plot(self, extent, dB=None, vmin=None, save=False):
         '''
         plots the integrated kx-ky-spectrum and the integrated k-omega-spectrum
         '''
         #FIXME implement: options of 3d something and slices along different axis, single slices or a bunch, use subspectra in 2D!
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, np.sum(self.spectrum[self.Nt//2:], axis=0)*self.dw)
-        if save:
-            plotting_interface.savefig(fn)
-        #FIXME: k-omega-spectrum... 
-        #plotting_interface.plot_k_w_spec(self.)
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, np.sum(self.spectrum[self.Nt//2:], axis=0)*self.dw, extent=extent)
 
     def remove_zeroth(self):
         self.coeffs[self.Nt//2, self.Nx//2, self.Ny//2] = 0
@@ -589,6 +599,18 @@ class SpectralAnalysis(object):
         else:
             return SpectralAnalysis(self.spectrumND.coeffs.copy(), self.spectrumND.spectrum.copy(), self.axes_grid.copy(), self.window_applied, grid_cut_off=self.grid_cut_off.copy())
  
+
+    def get_sub_spectrum(self, kx_min, kx_max, ky_min=None, ky_max=None, w_min=None, w_max=None):
+        '''
+        return a subset of the axes and the spectrum
+        '''
+        if self.ND==1:
+            return self.spectrumND.get_sub_spectrum(kx_min, kx_max)
+        elif self.ND==2:
+            return self.spectrumND.get_sub_spectrum(kx_min, kx_max, ky_min, ky_max)
+        elif self.ND==3:
+            return self.spectrumND.get_sub_spectrum(w_min, w_max, kx_min, kx_max, ky_min, ky_max)
+
     def get_peak(self):
         '''
         Return peak value
@@ -627,20 +649,23 @@ class SpectralAnalysis(object):
             print('wrong axis input for given specturm!')
             return 0  
             
-    def plot(self):#, fn, waterdepth=None, extent=None, U=None, dB=True, vmin=-60, save=False):
+    def plot(self, extent=None):#, fn, waterdepth=None, extent=None, U=None, dB=True, vmin=-60, save=False):
         '''
         TODO: recheck all arguments sensible to include
         '''
         #FIXME description!
         if self.ND==1:
-            self.spectrumND.plot()#fn, extent, save)
+            self.spectrumND.plot(extent)
         elif self.ND==2:
-            self.spectrumND.plot()#fn, waterdepth, extent, U, dB, vmin, save)
+            self.spectrumND.plot(extent)
         elif self.ND==3:
-            self.spectrumND.plot()#fn, waterdepth, extent, U, dB, vmin, save)  
+            self.spectrumND.plot(extent)
 
-    def plot_orig_disp_rel(self, w, z, Ux, Uy, h):
-        self.spectrumND.plot_orig_disp_rel(w, z, Ux, Uy, h)
+    def plot_orig_disp_rel(self, w, z, Ux, Uy, h, extent=None):
+        self.spectrumND.plot_orig_disp_rel(w, z, Ux, Uy, h, extent)
+
+    def plot_0current_disp_rel(self, w, h, extent=None):
+        self.spectrumND.plot_0current_disp_rel(w, h, extent)
 
     def plot_disp_rel_kx_ky(self, w, h):
         if self.ND==2:

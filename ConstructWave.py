@@ -134,7 +134,7 @@ def JonswapWave2D_asymetric(x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h=1000
     dk = 0.005
     k = np.arange(0.01, 0.35, dk)
     dtheta=0.05
-    theta=np.arange(-np.pi, np.pi, dtheta)
+    theta=np.arange(0, 2*np.pi, dtheta)
     Nk = len(k)
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
@@ -160,7 +160,7 @@ def JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
     dk = 0.005
     k = np.arange(0.01, 0.35, dk)
     dtheta=0.05
-    theta=np.arange(-np.pi, np.pi, dtheta)
+    theta=np.arange(0, 2*np.pi, dtheta)
     Nk = len(k)
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
@@ -180,7 +180,7 @@ def JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
         eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
     return surface_core.Surface('jonswap', eta, [t, x, y]) 
 
-def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, Ux, Uy):
+def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, U, psi):
     g = 9.81
     Nt = len(t)
     Nx = len(x)
@@ -188,7 +188,7 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     dk = 0.005
     k = np.arange(0.01, 0.35, dk)
     dtheta=0.05
-    theta=np.arange(-np.pi, np.pi, dtheta)
+    theta=np.arange(0, 2*np.pi, dtheta)
     Nk = len(k)
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
@@ -197,18 +197,11 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
-    Uxk = 2*kk*np.sum(Ux*np.exp(np.outer(2*kk,z)), axis=1).reshape(kk.shape)
-    Uyk = 2*kk*np.sum(Uy*np.exp(np.outer(2*kk,z)), axis=1).reshape(kk.shape)
+    Uk = 2*kk*np.sum(U*np.exp(np.outer(2*kk,z)), axis=1).reshape(kk.shape)
     # TODO: write a test for this program... just visualize the dispersion relation
-    ww = kk*(np.cos(th)*Uxk + np.sin(th)*Uyk) + np.sqrt(kk*g*np.tanh(kk*h))
+    ww = kk*Uk*np.cos(th-psi) + np.sqrt(kk*g*np.tanh(kk*h))
     kx = kk*np.cos(th)
     ky = kk*np.sin(th)
-    import matplotlib.pyplot as plt 
-    from mpl_toolkits.mplot3d import Axes3D
-    fig = plt.figure()
-    axes = fig.gca(projection='3d')
-    axes.plot_surface(kx, ky, ww)
-    plt.show()
     ascale1 = np.random.rand(Nk, Ntheta)*2 - 1
     ascale2 = np.random.rand(Nk, Ntheta)*2 - 1
     a1 = (ascale1*a_mean).flatten()
@@ -227,7 +220,7 @@ def JonswapWave3D_asymetric(t, x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h=1
     dk = 0.005
     k = np.arange(0.01, 0.35, dk)
     dtheta=0.05
-    theta=np.arange(-np.pi, np.pi, dtheta)
+    theta=np.arange(0, 2*np.pis, dtheta)
     Nk = len(k)
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
