@@ -821,10 +821,10 @@ def local_incidence_angle_from_file(fn, H):
 def current_from_file(fn):
     hf = h5py.File(fn, 'r')
     z = hf.get('z')
-    Ux = hf.get('U')
-    Uy = hf.get('psi')
+    U = hf.get('U')
+    psi = hf.get('psi')
     hf.close()
-    return z, Ux, Uy
+    return z, U, psi
 
 def wave_parameters_from_file(fn):
     hf = h5py.File(fn, 'r')
