@@ -820,9 +820,9 @@ def local_incidence_angle_from_file(fn, H):
 
 def current_from_file(fn):
     hf = h5py.File(fn, 'r')
-    z = hf.get('z')
-    U = hf.get('U')
-    psi = hf.get('psi')
+    z = np.array(hf.get('z'))
+    U = np.array(hf.get('U'))
+    psi = np.array(hf.get('psi')) + 0 #+0 to convert possible float
     hf.close()
     return z, U, psi
 

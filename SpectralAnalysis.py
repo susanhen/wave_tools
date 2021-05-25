@@ -62,6 +62,10 @@ class _SpectralAnalysis1d(object):
         '''
         N_half = int(0.5*len(self.kx))
         return self.kx[N_half:], moving_average.moving_average(2*self.spectrum[N_half:], mov_av)
+
+    def get_peak_dir(self):
+        print('\n\nError: peak dir not implemented for 1D\n')        
+        return None
        
     def get_characteristic_peak(self, mov_av=80, moment=1, plot_spec=False):
         '''
@@ -108,7 +112,20 @@ class _SpectralAnalysis1d(object):
 
     def remove_zeroth(self):
         self.coeffs[self.Nx//2] = 0
-        self.spectrum[self.Nx//2] = 0
+        self.spectrum[self.Nx//2] = 0 
+
+    def get_sub_spec2d(self, k_limit):
+        '''
+        Returns new spec3d object based on new  kx, ky and spectrum within the given limits
+        '''
+        kx_max_ind = np.argwhere(self.kx >= k_limit)[0][0] + 1
+        kx_min_ind = self.Nx - kx_max_ind
+        # create new vectors, the uppermost value is equal to the second entry
+        kx_new = self.kx[kx_min_ind: kx_max_ind]
+        grid = [kx_new]
+        coeffs_new = self.coeffs[kx_min_ind:kx_max_ind]
+        spectrum_new = self.spectrum[kx_min_ind:kx_max_ind]
+        return coeffs_new, spectrum_new, grid 
         
 class _SpectralAnalysis2d(object):
     def __init__(self, coeffs, spectrum, k, grid_cut_off=None):
@@ -141,6 +158,11 @@ class _SpectralAnalysis2d(object):
         Return the 2d complex coefficients with the corresponding grid
         '''
         return self.kx, self.ky, self.coeffs.copy()  
+
+    def get_peak_dir(self):
+        k, theta, spec2d_pol = polar_coordinates.cart2finePol(self.kx, self.ky, self.spectrum, Nr=200, Ntheta=400)
+        spec1d = np.mean(spec2d_pol, axis=0)
+        return theta[np.argmax(spec1d)]
         
     def plot(self, extent):# dB=True, vmin=-60):
         '''
@@ -160,6 +182,23 @@ class _SpectralAnalysis2d(object):
         kx_new = self.kx[kx_min_ind: kx_max_ind]
         ky_new = self.ky[ky_min_ind: ky_max_ind]
         return kx_new, ky_new, self.spectrum[kx_min_ind:kx_max_ind, ky_min_ind:ky_max_ind]
+ 
+    def get_sub_spec2d(self, k_limit):
+        '''
+        Returns new spec3d object based on new  kx, ky and spectrum within the given limits
+        '''
+        kx_max_ind = np.argwhere(self.kx >= k_limit)[0][0] + 1
+        kx_min_ind = self.Nx - kx_max_ind
+        ky_max_ind = np.argwhere(self.ky >= k_limit)[0][0] + 1
+        ky_min_ind = self.Ny - ky_max_ind
+        # create new vectors, the uppermost value is equal to the second entry
+        kx_new = self.kx[kx_min_ind: kx_max_ind]
+        ky_new = self.ky[ky_min_ind: ky_max_ind]
+        grid = [kx_new, ky_new]
+        coeffs_new = self.coeffs[kx_min_ind:kx_max_ind, ky_min_ind:ky_max_ind]
+        spectrum_new = self.spectrum[kx_min_ind:kx_max_ind, ky_min_ind:ky_max_ind]
+        return coeffs_new, spectrum_new, grid      
+
 
     def plot_orig_disp_rel(self, w, z, Ux, Uy, h, extent=None):
         plotting_interface.plot_disp_rel_at(w, h, z, Ux, Uy, 'w', extent)  
@@ -353,7 +392,7 @@ class _SpectralAnalysis3d(object):
         self.w = grid[0]
         self.kx = grid[1]
         self.ky = grid[2]
-        self.dw = self.w[1] - self.w[0]
+        self.dw = np.abs(self.w[1] - self.w[0])
         self.dkx = self.kx[1] - self.kx[0]
         self.dky = self.ky[1] - self.ky[0]
         self.Nt, self.Nx, self.Ny = self.coeffs.shape
@@ -381,6 +420,12 @@ class _SpectralAnalysis3d(object):
         '''
         return self.w, self.kx, self.ky, self.coeffs.copy()   
 
+    def get_peak_dir(self):
+        spec2d = np.sum(self.spectrum[:self.Nt//2,:,:], axis=0)
+        k, theta, spec2d_pol = polar_coordinates.cart2finePol(self.kx, self.ky, spec2d, Nr=200, Ntheta=400)
+        spec1d = np.mean(spec2d_pol, axis=0)
+        return theta[np.argmax(spec1d)]
+
     def plot(self, extent, dB=None, vmin=None, save=False):
         '''
         plots the integrated kx-ky-spectrum and the integrated k-omega-spectrum
@@ -392,14 +437,20 @@ class _SpectralAnalysis3d(object):
         self.coeffs[self.Nt//2, self.Nx//2, self.Ny//2] = 0
         self.spectrum[self.Nt//2, self.Nx//2, self.Ny//2] = 0  
 
-    def get_w_slice(self, window_applied, grid_cut_off):
+    def get_w_slice(self, window_applied, grid_cut_off, w_limit, k_limit):
         '''
-        spectral objects for all positve (negative???) frequencies
+        spectral objects for all negative frequencies
         '''
+        grid, coeffs_new, spec_new = self.get_sub_spec3d(w_limit, k_limit)
+        w, kx, ky = grid
+        Nw = len(w)
+        w_upper = w[Nw//2:]
         spec2d_list = []
-        for i in range(self.Nt//2, self.Nt):
-            spec2d_list.append(SpectralAnalysis(self.coeffs[i,:,:], self.spectrum[i,:,:], [self.kx, self.ky], window_applied, grid_cut_off))
-        return spec2d_list
+        for i in np.arange(Nw//2, 0, -1):
+        #for i in np.arange(Nw//2, Nw):                    
+            spec2d_i = SpectralAnalysis(coeffs_new[i,:,:].copy(), spec_new[i,:,:].copy(), [kx, ky], window_applied=window_applied, grid_cut_off=grid_cut_off)
+            spec2d_list.append(spec2d_i)
+        return [w_upper, kx, ky], spec2d_list        
 
     def integrate_theta(self, radiusSize):
         w_k_spec = np.zeros((self.Nt, radiusSize))
@@ -412,10 +463,8 @@ class _SpectralAnalysis3d(object):
         interpol = scipy.interpolate.interp1d(k, k_w_spec, axis=0, kind='cubic')
         k_fine = np.linspace(0, k[-1], 300)[1:]
 
-
         def func(x, a, b, c):
-            return a * np.exp(-b * x) + c
-        
+            return a * np.exp(-b * x) + c        
         
         k_max_inds = np.argmax(interpol(k_fine), axis=0)
         measured_k1 = k_fine[k_max_inds]
@@ -442,6 +491,79 @@ class _SpectralAnalysis3d(object):
         plt.plot(measured_k1[choose1], self.w[choose1], '--')
         plt.plot(measured_k2[choose2], self.w[choose2], ':')
         plotting_interface.show()
+
+    
+    def get_sub_spectrum(self, w_min, w_max, kx_min, kx_max, ky_min, ky_max):
+        '''
+        Returns new w, kx, ky and spectrum within the given limits
+        '''
+        w_min_ind = np.argwhere(self.w > w_min)[0][0]
+        w_max_ind = np.argwhere(self.w > w_max)[0][0]
+        kx_min_ind = np.argwhere(self.kx > kx_min)[0][0]
+        kx_max_ind = np.argwhere(self.kx > kx_max)[0][0]
+        ky_min_ind = np.argwhere(self.ky > ky_min)[0][0]
+        ky_max_ind = np.argwhere(self.ky > ky_max)[0][0]
+        w_new = self.w[w_min_ind:w_max_ind]
+        kx_new = self.kx[kx_min_ind: kx_max_ind]
+        ky_new = self.ky[ky_min_ind: ky_max_ind]
+        return w_new, kx_new, ky_new, self.spectrum[w_min_ind:w_max_ind, kx_min_ind:kx_max_ind, ky_min_ind:ky_max_ind]
+
+ 
+    def get_sub_spec3d(self, w_limit, k_limit):
+        '''
+        Returns new spec3d object based on new w, kx, ky and spectrum within the given limits
+        '''
+        w_max_ind = np.argwhere(self.w >= w_limit)[0][0] + 1
+        w_min_ind = self.Nt - w_max_ind
+        kx_max_ind = np.argwhere(self.kx >= k_limit)[0][0] + 1
+        kx_min_ind = self.Nx - kx_max_ind
+        ky_max_ind = np.argwhere(self.ky >= k_limit)[0][0] + 1
+        ky_min_ind = self.Ny - ky_max_ind
+        # create new vectors, the uppermost value is equal to the second entry
+        w_new = self.w[w_min_ind:w_max_ind]
+        kx_new = self.kx[kx_min_ind: kx_max_ind]
+        ky_new = self.ky[ky_min_ind: ky_max_ind]
+        grid = [w_new, kx_new, ky_new]
+        coeffs_new = self.coeffs[w_min_ind:w_max_ind, kx_min_ind:kx_max_ind, ky_min_ind:ky_max_ind]
+        spectrum_new = self.spectrum[w_min_ind:w_max_ind, kx_min_ind:kx_max_ind, ky_min_ind:ky_max_ind]
+        return grid, coeffs_new, spectrum_new
+
+    def get_anti_aliased_spec3d(self, k_limit):
+        
+        k_limit = 0.4
+        #grid, spectrum_new = self.get_sub_spec3d(self.w[-1], k_limit)
+        grid = [self.w, self.kx, self.ky]
+        spectrum_new = self.spectrum
+        w, kx, ky = grid
+        Nt = 2*self.Nt-2
+        Nx = len(kx)
+        Ny = len(ky)        
+        theta_mean = self.get_peak_dir()
+        dtheta_max = 70*np.pi/180
+        coeffs_extended = np.zeros((Nt, Nx, Ny), dtype=complex)
+        spectrum_extended = np.zeros((Nt, Nx, Ny))
+        w_extended = self.dw * np.arange(-Nt//2, Nt//2) 
+        interval = self.Nt//2
+        w_mesh, kx_mesh, ky_mesh = np.meshgrid(w, kx, ky, indexing='ij')
+        kk = np.sqrt(kx_mesh**2 + ky_mesh**2)
+        th = np.arctan2(ky_mesh, kx_mesh)
+        mask_lower = np.where(np.abs(th - (theta_mean - np.pi))<= dtheta_max, 1, 0)
+        mask_upper = np.where(np.abs(th - theta_mean)<= dtheta_max, 1, 0)
+        
+        # bin ich eigentlich in der richtigen Richtung? Habe ich das richtig simuliert? hmmm muss angepasst werden, aber wo?
+        coeffs_extended[Nt//2:Nt//2+interval,:,:] = np.where(mask_lower[interval:,:,:], self.coeffs[interval:,:,:], 0).copy()
+        spectrum_extended[Nt//2:Nt//2+interval,:,:] = np.where(mask_lower[interval:,:,:], self.spectrum[interval:,:,:], 0).copy()
+        upper_coeffs = np.where(mask_lower[2:interval,:-1,:-1], self.coeffs[2:interval,:-1,:-1], 0)
+        coeffs_extended[Nt//2+interval:-1,1:,1:] = upper_coeffs.copy()
+        upper_spec = np.where(mask_lower[:interval-1,:-1,:-1], self.spectrum[:interval-1,:-1,:-1], 0)
+        spectrum_extended[Nt//2+interval:,1:,1:] = upper_spec.copy()
+
+        # mirror:
+        coeffs_extended[1:Nt//2,1:,1:] = np.conjugate(np.flip(coeffs_extended[Nt//2+1:,1:,1:])).copy()
+        spectrum_extended[1:Nt//2,1:,1:] = np.flip(spectrum_extended[Nt//2+1:,1:,1:]).copy()
+        grid = [w_extended, kx, ky]
+        return coeffs_extended, spectrum_extended, grid
+        
 
     def get_k_w_slice_at_peak(self, radiusSize):
         peak_indices = np.unravel_index(np.argmax(self.spectrum), (self.Nt, self.Nx, self.Ny))
@@ -611,6 +733,23 @@ class SpectralAnalysis(object):
         elif self.ND==3:
             return self.spectrumND.get_sub_spectrum(w_min, w_max, kx_min, kx_max, ky_min, ky_max)
 
+    def get_sub_spec(self, k_limit, w_limit=None):
+        if self.ND==1:
+            coeffs, spectrum, grid = self.spectrumND.get_sub_spec1d(k_limit)
+        if self.ND==2:
+            coeffs, spectrum, grid = self.spectrumND.get_sub_spec2d(k_limit)
+        if self.ND==3:
+            if w_limit in None:
+                w_limit = self.w[-1]
+            coeffs, spectrum, grid = self.spectrumND.get_sub_spec3d(w_limit, k_limit)
+        return SpectralAnalysis(coeffs, spectrum, grid, self.grid_cut_off)
+
+    def get_peak_dir(self):
+        '''
+        The peak direcion for averaged energy in direction
+        '''
+        return self.spectrumND.get_peak_dir()
+
     def get_peak(self):
         '''
         Return peak value
@@ -697,9 +836,13 @@ class SpectralAnalysis(object):
     def apply_MTF(self, grid_offset):
         self.spectrumND.apply_MTF(grid_offset)
 
-    def get_w_slice(self):
+    def get_w_slice(self, w_limit=None, k_limit=None):
         if self.ND == 3:
-            return self.spectrumND.get_w_slice(self.window_applied, self.grid_cut_off)
+            if w_limit is None:
+                w_limit = self.w[-1]
+            if k_limit is None:
+                k_limit = np.min(self.kx[-1], self.ky[-1])
+            return self.spectrumND.get_w_slice(self.window_applied, self.grid_cut_off, w_limit, k_limit)
         else:
             print('Error: get_w_slice is not implemented for dimensions lower than 3D')
 
@@ -729,6 +872,14 @@ class SpectralAnalysis(object):
             print('Error: Not implemented')
         else:
             print('Error: get_transform_to_polar not implemented for dimensions lower than 2D')
+
+    def get_anti_aliased_spec3d(self, k_limit):
+        if self.ND==3:
+            coeffs_extended, spectrum_extended, grid = self.spectrumND.get_anti_aliased_spec3d(k_limit)
+            return SpectralAnalysis(coeffs_extended, spectrum_extended, grid, self.grid_cut_off)
+        else:
+            print('Error: Not implemented')
+        
         
 
     def get_k_w_slice_at_peak(self):
