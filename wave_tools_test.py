@@ -9,7 +9,7 @@ from help_tools import convolution
 
 class SeaSurface(unittest.TestCase):
 
-    def setUp(self):
+    def setUp(self, plot_it=False):
         self.name = r'$\eta$'
         self.Nx = 64#1024
         self.Ny = 64#2*1024
@@ -24,21 +24,15 @@ class SeaSurface(unittest.TestCase):
         self.eta = 5*np.sin(self.kx*self.xx + self.ky*self.yy)
         self.surf2d = surface_core.Surface(self.name, self.eta, [self.x,self.y])
         self.spec2d = self.surf2d.define_SpectralAnalysis(grid_cut_off)
-        
-        #from wave_tools import fft_interface
-        #kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x, self.y])
-        #tmp_x, tmp_y, deta_dx = fft_interface.spectral2physical(eta_fft, [kx, ky])
                             
-        '''
-        import pylab as plt
-        plt.figure()
-        plt.imshow(self.eta)
-        plt.figure()
-        plt.imshow(deta_dx)
-        plt.figure()
-        plt.imshow(self.surf2d.etaND.eta)
-        plt.show()
-        '''
+        if plot_it:
+            import pylab as plt
+            plt.figure()
+            plt.imshow(self.eta)
+            plt.figure()
+            plt.imshow(self.surf2d.etaND.eta)
+            plt.show()
+        
         
     def test_inversion(self):
         surf2d_inversion = self.spec2d.invert('inversion_test', grid_offset=[self.x[0], self.y[0]])
@@ -46,9 +40,9 @@ class SeaSurface(unittest.TestCase):
             for j in range(0, self.Ny):
                 self.assertAlmostEqual(surf2d_inversion.etaND.eta[i,j], self.eta[i,j])
         for i in range(0, self.Nx):
-            self.assertAlmostEqual(self.x[i], surf2d_inversion.etaND.x_grid[i])        
+            self.assertAlmostEqual(self.x[i], surf2d_inversion.etaND.x[i])        
         for i in range(0, self.Ny):
-            self.assertAlmostEqual(self.y[i], surf2d_inversion.etaND.y_grid[i])
+            self.assertAlmostEqual(self.y[i], surf2d_inversion.etaND.y[i])
             
         
     def test_name(self):
@@ -72,10 +66,8 @@ class SeaSurface(unittest.TestCase):
             plt.plot(Res1.imag)
             plt.plot(Res2.imag)
             plt.show()
-        '''
         for i in range(0, self.Nx):
             self.assertAlmostEqual(Res1[i], Res2[i])
-        '''
         
     
     def test_2dconvolution(self, plot_it=False):
@@ -91,11 +83,11 @@ class SeaSurface(unittest.TestCase):
             plt.figure()
             plt.imshow(np.abs(Res2))
             plt.show()
-        '''
+        
         for i in range(0, self.Nx):
             for j in range(0, self.Ny):
                 self.assertAlmostEqual(Res1[i,j], Res2[i,j])
-        '''        
+                
         
     def test_shadowing(self):
         H = 45.0
