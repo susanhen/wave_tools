@@ -4,7 +4,7 @@ from help_tools import plotting_interface, polar_coordinates
 from radar_tools import dispersion_filter, filter_core
 import functools
 import operator
-import polarTransform
+#import polarTransform
 import scipy
 
 def _symmetrize2d(surf):

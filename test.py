@@ -4,7 +4,7 @@ import pylab as plt
 import jonswap as j
 import polarTransform
 from scipy import stats
-import imageio
+#import imageio
 
 N = 256
 N_theta=50

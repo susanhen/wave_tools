@@ -290,24 +290,30 @@ class SpectralRealization:
         if not bathy is  None:
             H = bathy.H
         else:
-            H = h
+            H = h*np.ones((Nx, Ny))
         
         ti = 0#t[0]
         X, Y = np.meshgrid(x, y, indexing='ij')
         theta = self.Theta_r
         dx = np.gradient(x)
+
         
         zeta = np.zeros((Nx, Ny))
         #phase = np.random.uniform(size=self.N_f)*np.pi*2
         print('before loop')
         for i in range(0, self.N_f):
+            k2H_by_sinh_2kH = np.where(k[i,:,:]*H < 50,  2*k[i,:,:]*H / np.sinh(2*k[i,:,:]*H), 0)
+            k2H_by_sinh_2kH = np.where(k[i,:,:]*H < 50,  2*k[i,:,:]*H / np.sinh(2*k[i,:,:]*H), 0)
             for j in range(0, self.N_theta):
                 #zeta += (self.a[i,j]* np.cos(w[i,j]*ti- k[i,:,:]*(np.cos(theta[i,j])*X + np.sin(theta[i,j])*Y)))
                 thetaxy = np.abs(np.arcsin(np.sin(theta[i,j])*k[i,0,0]/k[i,:,:]))
-                Cg0x_sqrt = np.sqrt(w[i,j]/2 / k[i,0,0] * (1+(2*k[i,0,0]*H)/np.sinh(2*k[i,0,0]*H)))*cmath.sqrt(np.cos(theta[i,j]))
+                Cg0x_sqrt = np.sqrt(w[i,j]/2 / k[i,0,0] * (1+k2H_by_sinh_2kH))*cmath.sqrt(np.cos(theta[i,j]))
+
+    Cg0x=pi*fr(j)./k{mod(j,N_f)+1}(1,1).*(1+(2*k{mod(j,N_f)+1}(1,1).*H)./sinh(2*k{mod(j,N_f)+1}(1,1).*H))*cos(theta0);
+    Cgx= pi*fr(j)./k{mod(j,N_f)+1}.*(1+(2*k{mod(j,N_f)+1}.*H)./sinh(2*k{mod(j,N_f)+1}.*H)).*cos(thetaxy);
                 kx = k[i,:,:] * np.cos(thetaxy)
                 ksh = np.cumsum(kx[:,1])*dx
-                Cgx_sqrt =  np.sqrt(w[i,j]/2 / k[i,:,:] * (1+(2*k[i,:,:]*H)/np.sinh(2*k[i,:,:]*H))*np.cos(thetaxy))
+                Cgx_sqrt =  np.sqrt(w[i,j]/2 / k[i,:,:] * (1+k2H_by_sinh_2kH)*np.cos(thetaxy))
                 phase = np.random.uniform()*np.pi*2
                 zeta += self.a[i,j]* np.abs(Cg0x_sqrt/Cgx_sqrt)*np.cos(phase-k[i,:,:]*np.sin(theta[i,j])*Y
                 +np.outer(ksh, np.ones(Ny)))

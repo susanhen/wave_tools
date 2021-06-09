@@ -23,7 +23,7 @@ def jonswap(w, wp, Hs, gamma=3.3, w_cut=None):
     b = 5./4
     a = 0.0081
     r = np.exp(-(ww-wp)**2/(2*(wp*s)**2))
-    c = np.where(ww>0, exp(-b*(wp/ww)**4), 0)
+    c = np.where(ww>0, np.exp(-b*(wp/ww)**4), 0)
     g = 9.81
     jonny = np.zeros(len(w))
     jonny[1:] = np.where(c>10**(-10), a*g**2/ww**5 * c * gamma**r, 0)
