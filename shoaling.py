@@ -1,5 +1,6 @@
 #shoaling
 import numpy as np
+from numpy.lib import scimath as SM
 from scipy.optimize import fsolve
 import pylab as plt
 from scipy.special import gamma
@@ -7,7 +8,6 @@ from scipy.interpolate import interp1d
 from scipy.integrate import dblquad, quad, simps
 from scipy import integrate
 from matplotlib import cm
-import cmath
 from help_tools import plotting_interface
 
 class Pol2Cart:
@@ -51,21 +51,22 @@ class Pol2Cart:
 
 class Bathymetry:
     def __init__(self, x, y):
-        x1 = np.arange(400, 750 + dx, dx)
-        x2 = np.arange(800, 950 + dx, dx)
-        x3 = np.arange(1000, 1100 + dx, dx)
-        x_u = np.block([x1, x2, x3])
+        dy = y[1] - y[0]
+        y1 = np.arange(400, 750 + dy, dy)
+        y2 = np.arange(800, 950 + dy, dy)
+        y3 = np.arange(1000, 1100 + dy, dy)
+        y_u = np.block([y1, y2, y3])
         self.x = x
         self.y = y
         self.N_x = len(self.x)
         self.N_y = len(self.y)
-        bathy1 = -25 * (x_u<=750)
-        bathy2 = (0.1*x_u-100)*(np.logical_and(x_u>=800, x_u<= 950))
-        bathy3 = -2*(x_u>=1000)
+        bathy1 = -25 * (y_u<=750)
+        bathy2 = (0.1*y_u-100)*(np.logical_and(y_u>=800, y_u<= 950))
+        bathy3 = -2*(y_u>=1000)
         bathy = bathy1 + bathy2 + bathy3
-        h_func = interp1d(x_u, bathy, kind='cubic')
-        self.h = h_func(x)
-        self.H = -np.outer(self.h, np.ones(len(y))) 
+        h_func = interp1d(y_u, bathy, kind='cubic')
+        self.h = h_func(y)
+        self.H = -np.outer(np.ones(len(x)), self.h) 
         #TODO: should coordinate system be changed to have x parallel to beach?
         
     def plot1d(self):
@@ -290,7 +291,7 @@ class SpectralRealization:
         if not bathy is  None:
             H = bathy.H
         else:
-            H = h*np.ones((Nx, Ny))
+            H = h
         
         ti = 0#t[0]
         X, Y = np.meshgrid(x, y, indexing='ij')
@@ -303,21 +304,16 @@ class SpectralRealization:
         print('before loop')
         for i in range(0, self.N_f):
             k2H_by_sinh_2kH = np.where(k[i,:,:]*H < 50,  2*k[i,:,:]*H / np.sinh(2*k[i,:,:]*H), 0)
-            k2H_by_sinh_2kH = np.where(k[i,:,:]*H < 50,  2*k[i,:,:]*H / np.sinh(2*k[i,:,:]*H), 0)
             for j in range(0, self.N_theta):
-                #zeta += (self.a[i,j]* np.cos(w[i,j]*ti- k[i,:,:]*(np.cos(theta[i,j])*X + np.sin(theta[i,j])*Y)))
                 thetaxy = np.abs(np.arcsin(np.sin(theta[i,j])*k[i,0,0]/k[i,:,:]))
-                Cg0x_sqrt = np.sqrt(w[i,j]/2 / k[i,0,0] * (1+k2H_by_sinh_2kH))*cmath.sqrt(np.cos(theta[i,j]))
-
-    Cg0x=pi*fr(j)./k{mod(j,N_f)+1}(1,1).*(1+(2*k{mod(j,N_f)+1}(1,1).*H)./sinh(2*k{mod(j,N_f)+1}(1,1).*H))*cos(theta0);
-    Cgx= pi*fr(j)./k{mod(j,N_f)+1}.*(1+(2*k{mod(j,N_f)+1}.*H)./sinh(2*k{mod(j,N_f)+1}.*H)).*cos(thetaxy);
                 kx = k[i,:,:] * np.cos(thetaxy)
                 ksh = np.cumsum(kx[:,1])*dx
-                Cgx_sqrt =  np.sqrt(w[i,j]/2 / k[i,:,:] * (1+k2H_by_sinh_2kH)*np.cos(thetaxy))
+                Cgx =  w[i,j]/(2*k[i,:,:] * (1+k2H_by_sinh_2kH))*(np.cos(thetaxy))
+                Cg0x = w[i,j]/(2*k[i,0,0] * (1+k2H_by_sinh_2kH[0,0]))*(np.cos(theta[i,j]))
                 phase = np.random.uniform()*np.pi*2
-                zeta += self.a[i,j]* np.abs(Cg0x_sqrt/Cgx_sqrt)*np.cos(phase-k[i,:,:]*np.sin(theta[i,j])*Y
+                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase-k[i,1,1]*np.sin(theta[i,j])*Y
                 +np.outer(ksh, np.ones(Ny)))
-        plotting_interface.plot_3d_as_2d(y, x, zeta.T)
+        plotting_interface.plot_3d_as_2d(x, y, zeta)
         '''        
         fig = plt.figure(figsize=(14,8))
         ax = fig.gca(projection='3d')
@@ -364,6 +360,7 @@ if __name__=='__main__':
     print('Directional Spectrum defined')
     b = Bathymetry(x, y)
     print('Bathymetry defined')
+    #b.plot1d()
     #b.plot2d()
     #k_b = realization.calc_wavenumber(b, plot_it=True)
     '''
@@ -376,7 +373,7 @@ if __name__=='__main__':
     print('y_pol = ', y_pol)
     print(test.transform(x_pol))
     '''
-    realization.invert(None, 0, x, y)
+    realization.invert(b, 0, x, y)
     
     
     
