@@ -52,26 +52,30 @@ class Pol2Cart:
 class Bathymetry:
     def __init__(self, x, y):
         dy = y[1] - y[0]
-        y1 = np.arange(400, 750 + dy, dy)
-        y2 = np.arange(800, 950 + dy, dy)
-        y3 = np.arange(1000, 1100 + dy, dy)
+        y1 = np.arange(400, 500 + dy, dy)
+        y2 = np.arange(550, 700 + dy, dy)
+        y3 = np.arange(750, 1100 + dy, dy)
         y_u = np.block([y1, y2, y3])
         self.x = x
         self.y = y
         self.Nx = len(self.x)
         self.Ny = len(self.y)
-        bathy1 = -25 * (y_u<=750)
-        bathy2 = (0.1*y_u-100)*(np.logical_and(y_u>=800, y_u<= 950))
-        bathy3 = -2*(y_u>=1000)
+        '''
+        bathy1 = -25 * (y_u<=500)
+        bathy2 = (-0.33*y_u+140)*(np.logical_and(y_u>=550, y_u<= 700))
+        bathy3 = -100*(y_u>=750)
+        '''
+        bathy1 = -2 * (y_u<=500)
+        bathy2 = (-0.1*y_u+50)*(np.logical_and(y_u>=550, y_u<= 700))
+        bathy3 = -25*(y_u>=750)
         bathy = bathy1 + bathy2 + bathy3
         h_func = interp1d(y_u, bathy, kind='cubic')
         self.h = h_func(y)
         self.H = -np.outer(np.ones(len(x)), self.h) 
-        #TODO: should coordinate system be changed to have x parallel to beach?
         
     def plot1d(self):
         plt.figure()
-        plt.plot(self.x, self.h, 'x')
+        plt.plot(self.y, self.h, 'x')
         
     def plot2d(self):
         X, Y= np.meshgrid(self.x, self.y, indexing='ij')
@@ -149,7 +153,7 @@ class DirectionalSpectrum:
         plt.xlabel(r'$f~[Hz]$')
         plt.ylabel(r'$\theta$')
         
-    def seed_f(self, f_min, f_max, N_f, plot_it=True):
+    def seed_f(self, f_min, f_max, N_f, plot_it=False):
         #'''
         f = []
         while len(f)<N_f:
@@ -204,7 +208,7 @@ class DirectionalSpectrum:
         return ff, Theta
     
     
-    def define_realization(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=True):
+    def define_realization(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=False):
         f_r, Theta_r = self.seed_f_theta(f_min, f_max, theta_min, theta_max, N_f, N_theta)
         #print('theta seeded')
         #Q = quad(self.S, f_min, f_max)[0]
@@ -305,13 +309,14 @@ class SpectralRealization:
         for i in range(0, self.N_f):
             k2H_by_sinh_2kH = np.where(k[i,:,:]*H < 50,  2*k[i,:,:]*H / np.sinh(2*k[i,:,:]*H), 0)
             for j in range(0, self.N_theta):
-                thetaxy = np.abs(np.arcsin(np.sin(theta[i,j])*k[i,0,0]/k[i,:,:]))
+                thetaxy = np.abs(np.arcsin(np.sin(theta[i,j])*k[i,-1,-1]/k[i,:,:]))
                 ky = k[i,:,:] * np.cos(thetaxy)
                 ksh = np.cumsum(ky[0,:])*dy
                 Cgx =  w[i,j]/(2*k[i,:,:] * (1+k2H_by_sinh_2kH))*(np.cos(thetaxy))
-                Cg0x = w[i,j]/(2*k[i,0,0] * (1+k2H_by_sinh_2kH[0,0]))*(np.cos(theta[i,j]))
+                #Cg0x = w[i,j]/(2*k[i,0,0] * (1+k2H_by_sinh_2kH[0,0]))*(np.cos(theta[i,j]))
+                Cg0x = w[i,j]/(2*k[i,-1,-1] * (1+k2H_by_sinh_2kH[-1,-1]))*(np.cos(theta[i,j]))
                 phase = np.random.uniform()*np.pi*2
-                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase-k[i,1,1]*np.sin(theta[i,j])*X
+                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase-k[i,-1,-1]*np.sin(theta[i,j])*X
                 +np.outer(np.ones(Nx), ksh))
         plotting_interface.plot_3d_as_2d(x, y, zeta)
         '''        
@@ -336,8 +341,8 @@ if __name__=='__main__':
 
     dx = 2
     dy = dx
-    x = np.arange(-500, 500 + dy, dy)
-    y = np.arange(400, 1100 + dx, dx)
+    x = np.arange(-500, 500 + dx, dx)
+    y = np.arange(400, 1100 + dy, dy)
     g = 9.81
     Tp = 10
     fp = 1./Tp
@@ -360,8 +365,9 @@ if __name__=='__main__':
     print('Directional Spectrum defined')
     b = Bathymetry(x, y)
     print('Bathymetry defined')
-    #b.plot1d()
+    b.plot1d()
     #b.plot2d()
+    plt.show()
     #k_b = realization.calc_wavenumber(b, plot_it=True)
     '''
     theta = np.array([0.4, 0.6, 0.1])
