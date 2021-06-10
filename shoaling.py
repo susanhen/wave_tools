@@ -10,6 +10,7 @@ from scipy import integrate
 from matplotlib import cm
 from help_tools import plotting_interface
 
+
 class Pol2Cart:
     
 
@@ -118,11 +119,11 @@ class DirectionalSpectrum:
         self.theta_p = theta_p
         self.gam = gam
         g = 9.81        
-        U = lambda UU: 3.5*(g/UU)*(g/UU**2*F)**(-0.33)-fp
+        U = lambda UU: 3.5*(g/UU)*(g/UU**2*F)**(-0.33)-self.fp
         self.U10 = fsolve(U, 10,  xtol=1e-04)[0]
         self.xxn = g/self.U10**2*F
         self.S = lambda f:(0.076*self.xxn**(-0.22)*g**2/(2*np.pi)**4*(f)**(-5)*np.exp(-5/4*(self.fp/f)**4)
-         *gam**np.exp(-((f-self.fp)**2)/(2*(fp*(0.07*(1/2 + 1/2*np.sign(self.fp - f))
+         *gam**np.exp(-((f-self.fp)**2)/(2*(self.fp*(0.07*(1/2 + 1/2*np.sign(self.fp - f))
         +0.09*(1/2 -1/2*np.sign(self.fp - f))))**2)))
                 
         self.s = lambda f:((c*(2*np.pi*self.fp*self.U10/g)**(-2.5)*(f/self.fp)**5)*(1/2 + 1/2*np.sign(self.fp - f)) +
@@ -280,7 +281,7 @@ class SpectralRealization:
                     plt.plot(k_loc[i,:,0], self.f_r[:,0])
         return k_loc
                 
-    def invert(self, bathy, t, x, y, h=1000):
+    def invert(self, bathy, ti, x, y, h=1000, plot_it=True):
         # es sollte hier 2 Methoden geben: das argument des cos zu kartesischen konvertieren
         # man könnte auch einfach auf dem kart. System arbeiten (uniform) und dann nur die richtigen as dran multiplizieren. Dann bräuchte man vorher sicher auch die integrale nicht?
         # natürlich könnte man auch einfach zu Polarkoordinaten transferieren
@@ -291,17 +292,16 @@ class SpectralRealization:
         Ny = len(y)
         k = self.calc_wavenumber(Nx, Ny, bathy)
         print('wavenumber calculated')
-        w = 2*np.pi*self.f_r
+        w = 2*np.pi*self.f_r    
+
+        X, Y = np.meshgrid(x, y, indexing='ij')
+        theta = self.Theta_r
+        dy = np.gradient(y)
+        
         if not bathy is  None:
             H = bathy.H
         else:
             H = h
-        
-        ti = 0#t[0]
-        X, Y = np.meshgrid(x, y, indexing='ij')
-        theta = self.Theta_r
-        dy = np.gradient(y)
-
         
         zeta = np.zeros((Nx, Ny))
         #phase = np.random.uniform(size=self.N_f)*np.pi*2
@@ -313,26 +313,24 @@ class SpectralRealization:
                 ky = k[i,:,:] * np.cos(thetaxy)
                 ksh = np.cumsum(ky[0,:])*dy
                 Cgx =  w[i,j]/(2*k[i,:,:] * (1+k2H_by_sinh_2kH))*(np.cos(thetaxy))
-                #Cg0x = w[i,j]/(2*k[i,0,0] * (1+k2H_by_sinh_2kH[0,0]))*(np.cos(theta[i,j]))
                 Cg0x = w[i,j]/(2*k[i,-1,-1] * (1+k2H_by_sinh_2kH[-1,-1]))*(np.cos(theta[i,j]))
                 phase = np.random.uniform()*np.pi*2
-                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase-k[i,-1,-1]*np.sin(theta[i,j])*X
+                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase+w[i, j]*ti-k[i,-1,-1]*np.sin(theta[i,j])*X
                 +np.outer(np.ones(Nx), ksh))
-        plotting_interface.plot_3d_as_2d(x, y, zeta)
-        '''        
-        fig = plt.figure(figsize=(14,8))
-        ax = fig.gca(projection='3d')
-        surf = ax.plot_surface(X, Y, zeta, cmap=cm.coolwarm, linewidth=0, antialiased=True)
-        #fig.colorbar(surf, shrink=0.5, aspect=5)
-        #plt.imshow(zeta)
-        #plt.colorbar()
-        '''
-        #'''
-        plt.figure()
-        plt.plot(zeta[:,150])
-        plt.figure()
-        plt.plot(zeta[400,:])
-        #'''            
+        if plot_it:
+            plotting_interface.plot_3d_as_2d(x, y, zeta)
+            plt.colorbar()
+            plt.xlabel('$x~[\mathrm{m}]$')
+            plt.xlabel('$y~[\mathrm{m}]$')
+            plt.figure()
+            plt.plot(x, zeta[:,150])
+            plt.xlabel('$x~[\mathrm{m}]$')
+            plt.ylabel('$\eta~[\mathrm{m}]$')
+            plt.figure()
+            plt.plot(y, zeta[400,:])
+            plt.xlabel('$y~[\mathrm{m}]$')
+            plt.ylabel('$\eta~[\mathrm{m}]$')
+        return zeta
                 
 
     
@@ -365,23 +363,10 @@ if __name__=='__main__':
     print('Directional Spectrum defined')
     b = Bathymetry(x, y)
     print('Bathymetry defined')
-    b.plot1d()
+    #b.plot1d()
     #b.plot2d()
-    plt.show()
-    #k_b = realization.calc_wavenumber(b, plot_it=True)
-    '''
-    theta = np.array([0.4, 0.6, 0.1])
-    r = np.array([500, 550, 600, 700, 800])
-    test = Pol2Cart(r, theta, x, y)
-    x_pol = np.outer(r, np.cos(theta))
-    y_pol = np.outer(r, np.sin(theta))
-    print('x_pol = ', x_pol)
-    print('y_pol = ', y_pol)
-    print(test.transform(x_pol))
-    '''
-    realization.invert(b, 0, x, y)
-    
-    
+    #plt.show()
+    zeta = realization.invert(b, 0, x, y)    
     
     plt.show()
     
