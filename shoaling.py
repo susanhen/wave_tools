@@ -18,7 +18,7 @@ class Pol2Cart:
         Based on uniform axis defined in x and y the 
         '''
         self.x_mesh, self.y_mesh = np.meshgrid(x, y, indexing='ij')
-        self.N_x, self.N_y = self.x_mesh.shape
+        self.Nx, self.Ny = self.x_mesh.shape
         self.r_mesh, self.theta_mesh = np.meshgrid(r, theta, indexing='ij')
         x_pol = (self.r_mesh*np.cos(self.theta_mesh)).flatten()
         y_pol = (self.r_mesh*np.sin(self.theta_mesh)).flatten()
@@ -40,7 +40,7 @@ class Pol2Cart:
         if A.shape != self.r_mesh.shape:
             print('input format does not have the right shape')
         else:
-            A_out = np.zeros((self.N_x, self.N_y), dtype=A.dtype)
+            A_out = np.zeros((self.Nx, self.Ny), dtype=A.dtype)
             A_flat = A.flatten()
             for i in range(0, A_flat.size):
                 mapped_i = self.x_cart_indices[i]
@@ -58,8 +58,8 @@ class Bathymetry:
         y_u = np.block([y1, y2, y3])
         self.x = x
         self.y = y
-        self.N_x = len(self.x)
-        self.N_y = len(self.y)
+        self.Nx = len(self.x)
+        self.Ny = len(self.y)
         bathy1 = -25 * (y_u<=750)
         bathy2 = (0.1*y_u-100)*(np.logical_and(y_u>=800, y_u<= 950))
         bathy3 = -2*(y_u>=1000)
@@ -86,7 +86,7 @@ class Bathymetry:
         for i in range(N_f):
         #kt = np.zeros(len(self.h))
         #   for j in range(0, len(self.h)):
-            #kt = np.abs(fsolve(lambda k: ((2*np.pi*f_r[i,0])**2 - 9.81*k*np.tanh(k*(-self.h)) ), 0.01*np.ones(self.N_x), xtol=0.01))
+            #kt = np.abs(fsolve(lambda k: ((2*np.pi*f_r[i,0])**2 - 9.81*k*np.tanh(k*(-self.h)) ), 0.01*np.ones(self.Nx), xtol=0.01))
             
             w = 2*np.pi*f_r[i,0]
             ki = w**2/(9.81)
@@ -103,7 +103,7 @@ class Bathymetry:
                 
             #kt = (2*np.pi*f_r[i,0])**2 - 9.81*k*np.tanh(k*(-self.h)) )
             
-            k_out[i,:,:] = np.outer(ki, np.ones(self.N_y))
+            k_out[i,:,:] = np.outer(np.ones(self.Nx), ki)
         return k_out
             
 
@@ -272,8 +272,8 @@ class SpectralRealization:
             plt.figure()
             plt.plot(k_loc[:,0,0], self.f_r[:,0])
             if bathy!=None:
-                for i in range(1,bathy.N_x):
-                    plt.plot(k_loc[:,i,0], self.f_r[:,0])
+                for i in range(1,bathy.Ny):
+                    plt.plot(k_loc[i,:,0], self.f_r[:,0])
         return k_loc
                 
     def invert(self, bathy, t, x, y, h=1000):
@@ -296,7 +296,7 @@ class SpectralRealization:
         ti = 0#t[0]
         X, Y = np.meshgrid(x, y, indexing='ij')
         theta = self.Theta_r
-        dx = np.gradient(x)
+        dy = np.gradient(y)
 
         
         zeta = np.zeros((Nx, Ny))
@@ -306,13 +306,13 @@ class SpectralRealization:
             k2H_by_sinh_2kH = np.where(k[i,:,:]*H < 50,  2*k[i,:,:]*H / np.sinh(2*k[i,:,:]*H), 0)
             for j in range(0, self.N_theta):
                 thetaxy = np.abs(np.arcsin(np.sin(theta[i,j])*k[i,0,0]/k[i,:,:]))
-                kx = k[i,:,:] * np.cos(thetaxy)
-                ksh = np.cumsum(kx[:,1])*dx
+                ky = k[i,:,:] * np.cos(thetaxy)
+                ksh = np.cumsum(ky[0,:])*dy
                 Cgx =  w[i,j]/(2*k[i,:,:] * (1+k2H_by_sinh_2kH))*(np.cos(thetaxy))
                 Cg0x = w[i,j]/(2*k[i,0,0] * (1+k2H_by_sinh_2kH[0,0]))*(np.cos(theta[i,j]))
                 phase = np.random.uniform()*np.pi*2
-                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase-k[i,1,1]*np.sin(theta[i,j])*Y
-                +np.outer(ksh, np.ones(Ny)))
+                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase-k[i,1,1]*np.sin(theta[i,j])*X
+                +np.outer(np.ones(Nx), ksh))
         plotting_interface.plot_3d_as_2d(x, y, zeta)
         '''        
         fig = plt.figure(figsize=(14,8))
@@ -324,9 +324,9 @@ class SpectralRealization:
         '''
         #'''
         plt.figure()
-        plt.plot(zeta[:,400])
+        plt.plot(zeta[:,150])
         plt.figure()
-        plt.plot(zeta[150,:])
+        plt.plot(zeta[400,:])
         #'''            
                 
 
@@ -336,8 +336,8 @@ if __name__=='__main__':
 
     dx = 2
     dy = dx
-    x = np.arange(400, 1100 + dx, dx)
-    y = np.arange(-500, 500 + dy, dy)
+    x = np.arange(-500, 500 + dy, dy)
+    y = np.arange(400, 1100 + dx, dx)
     g = 9.81
     Tp = 10
     fp = 1./Tp
