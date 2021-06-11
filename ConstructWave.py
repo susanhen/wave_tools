@@ -464,7 +464,7 @@ def shoaling_case(surf_name='shoaling_surface', save=False):
     eta = np.zeros((Nt,Nx,Ny))
     for i in range(0, Nt):
         eta[i,:,:] = realization.invert(b, t[i], x, y)    
-    surf = surface_core.Surface(surf_name, eta, [x,y])
+    surf = surface_core.Surface(surf_name, eta, [t, x,y])
     if save:
         surf.save('../../Data/SimulatedWaves/shoaling_windsea_res{0:1.1f}_dt{1:1.1f}_T{2:d}_U0_surf3d.hdf5'.format(dx, dt, T))
     return surf
