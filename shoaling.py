@@ -281,7 +281,7 @@ class SpectralRealization:
                     plt.plot(k_loc[i,:,0], self.f_r[:,0])
         return k_loc
                 
-    def invert(self, bathy, ti, x, y, h=1000, plot_it=True):
+    def invert(self, bathy, ti, x, y, h=1000, plot_it=False):
         # es sollte hier 2 Methoden geben: das argument des cos zu kartesischen konvertieren
         # man könnte auch einfach auf dem kart. System arbeiten (uniform) und dann nur die richtigen as dran multiplizieren. Dann bräuchte man vorher sicher auch die integrale nicht?
         # natürlich könnte man auch einfach zu Polarkoordinaten transferieren

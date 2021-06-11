@@ -17,7 +17,22 @@ class _Surface1D(object):
         else:
             self.x=grid
         self.N = len(self.x)
-        self.dx = self.x[1]-self.x[0]
+        self.dx = self.x[1]-self.x[0]      
+
+    def fft_interpolate(self, inter_factor_x): 
+        # TODO: test!
+        return fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x*self.N)
+
+    def get_sub_surface(self, extent, dx_new):
+        # TODO: test
+        interpol_dx = 0.5
+        if dx_new is not None:
+            inter_factor_x = int(self.dx/interpol_dx)
+            x_new, eta_new = fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x)
+        x_ind1 = np.argmin(np.abs(x_new - extent[0]))
+        x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
+        x_spacing = int(interpol_dx/dx_new)
+        return [x_new[x_ind1:x_ind2:x_spacing]], eta_new[x_ind1:x_ind2:x_spacing]
         
     def get_r_grid(self):
         return np.abs(self.x)           
@@ -203,22 +218,30 @@ class _Surface2D(object):
         plotting_interface.plot_3d_as_2d(self.x, self.y, self.eta)
             
     def fft_interpolate(self, inter_factor_x, inter_factor_y):
-        '''
-        Interpolate eta by truncated Fourier expansion
-        
-        Parameters:
-        -----------
-        input
-                inter_factor_x      int
-                                    interpolated Nx = Nx*inter_factor_x
-                inter_factor_y      int
-                                    interpolated Ny = Ny*inter_factor_y
-        output 
-                surface_inter       object
-                                    instance of Surface class with interpolated eta and grid
-        ''' 
         x_inter, y_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x, self.y, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
-        return Surface('noName_inter', eta_inter, [x_inter, y_inter]) 
+        return  [x_inter, y_inter], eta_inter
+
+    def get_sub_surface(self, extent, dx_new, dy_new):
+        interpol_dx = 0.5
+        interpol_dy = 0.5
+        if dx_new is not None or dy_new is not None:
+            if dx_new is None:
+                dx_new = self.dx
+                interpol_dx = self.dx
+            if dy_new is None:
+                dy_new = self.dy
+                interpol_dy = self.dy
+            inter_factor_x = int(self.dx/interpol_dx)
+            inter_factor_y = int(self.dy/interpol_dy)
+            grid_new, eta_new = self.fft_interpolate(inter_factor_x, inter_factor_y)
+            x_new, y_new = grid_new
+        x_ind1 = np.argmin(np.abs(x_new - extent[0]))
+        x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
+        y_ind1 = np.argmin(np.abs(y_new - extent[0]))
+        y_ind2 = np.argmin(np.abs(y_new - extent[1]))+1
+        x_spacing = int(interpol_dx/dx_new)
+        y_spacing = int(interpol_dy/dy_new)
+        return [x_new[x_ind1:x_ind2:x_spacing], y_new[y_ind1:y_ind2:y_spacing]], eta_new[x_ind1:x_ind2:x_spacing,y_ind1:y_ind2:y_spacing] 
 
     def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
         if k_cut_off is None:
@@ -413,6 +436,30 @@ class _Surface3D(object):
             illumination[i,:,:] = surf2d.get_illumination_function(H)
         return illumination
 
+    def get_sub_surface(self, extent, dt_new, dx_new, dy_new):
+        if dt_new is not None:
+            print('\nError: The interpolation of the temporal domain has not yet been implemented\n')
+            return None
+        interpol_dx = 0.5
+        interpol_dy = 0.5
+        if dx_new is not None or dy_new is not None:
+            if dx_new is None:
+                dx_new = self.dx
+                interpol_dx = self.dx
+            if dy_new is None:
+                dy_new = self.dy
+                interpol_dy = self.dy
+            inter_factor_x = int(self.dx/interpol_dx)
+            inter_factor_y = int(self.dy/interpol_dy)
+            x_new, y_new, eta_new = fft_interpolate.fft_interpol2d(self.x, self.y, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
+        x_ind1 = np.argmin(np.abs(x_new - extent[0]))
+        x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
+        y_ind1 = np.argmin(np.abs(y_new - extent[0]))
+        y_ind2 = np.argmin(np.abs(y_new - extent[1]))+1
+        x_spacing = int(interpol_dx/dx_new)
+        y_spacing = int(interpol_dy/dy_new)
+        return [self.t, x_new[x_ind1:x_ind2:x_spacing], y_new[y_ind1:y_ind2:y_spacing]], eta_new[:, x_ind1:x_ind2:x_spacing, y_ind1:y_ind2:y_spacing]     
+
 
 class Surface(object):
     '''
@@ -446,7 +493,19 @@ class Surface(object):
         self.eta = self.etaND.eta
 
     def copy(self, name):
-        return Surface(name, self.etaND.eta, self.grid, self.window_applied)        
+        return Surface(name, self.etaND.eta, self.grid, self.window_applied)    
+
+    def get_sub_surface(self, name, extent, dx_new=None, dy_new=None, dt_new=None):
+        if self.window_applied:
+            print('\nA window has been applied to the surface, creating a subsurface does not make sense \n')
+            return None
+        if self.ND==1:
+            grid, eta = self.etaND.get_sub_surface(extent, dx_new) 
+        if self.ND==2:
+            grid, eta = self.etaND.get_sub_surface(extent, dx_new, dy_new)            
+        if self.ND==3:
+            grid, eta = self.etaND.get_sub_surface(extent, dt_new, dx_new, dy_new)
+        return Surface(name, eta, grid, window_applied=False)
             
     def get_name(self):
         return self.name
@@ -567,18 +626,19 @@ class Surface(object):
                                     interpolated Nx = Nx*inter_factor_x
                 inter_factor_y      int
                                     interpolated Ny = Ny*inter_factor_y
-                inter_factor_z      int
-                                    interpolated Ny = Ny*inter_factor_z
+                inter_factor_t      int
+                                    interpolated Nt = Nt*inter_factor_t
         output 
                 surface_inter       object
                                     instance of Surface class with interpolated eta and grid
         '''
         if self.ND==1:
-            return self.etaND.fft_interpolate(inter_factor_x)
+            grid_new, eta_new = self.etaND.fft_interpolate(inter_factor_x)
         elif self.ND==2:
-            return self.etaND.fft_interpolate(inter_factor_x, inter_factor_y)
+            grid_new, eta_new = self.etaND.fft_interpolate(inter_factor_x, inter_factor_y)
         elif self.ND==3:
-            return self.etaND.fft_interpolate(inter_factor_t, inter_factor_x, inter_factor_y)        
+            grid_new, eta_new = self.etaND.fft_interpolate(inter_factor_t, inter_factor_x, inter_factor_y)        
+        return Surface('noName_inter', eta_new, grid_new, window_applied=False)
     
     def find_crests(self, axis, method='zero_crossing'): 
         '''
