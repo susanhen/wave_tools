@@ -10,6 +10,7 @@ from scipy import integrate
 from matplotlib import cm
 from help_tools import plotting_interface
 
+
 class Pol2Cart:
     
 
@@ -18,7 +19,7 @@ class Pol2Cart:
         Based on uniform axis defined in x and y the 
         '''
         self.x_mesh, self.y_mesh = np.meshgrid(x, y, indexing='ij')
-        self.N_x, self.N_y = self.x_mesh.shape
+        self.Nx, self.Ny = self.x_mesh.shape
         self.r_mesh, self.theta_mesh = np.meshgrid(r, theta, indexing='ij')
         x_pol = (self.r_mesh*np.cos(self.theta_mesh)).flatten()
         y_pol = (self.r_mesh*np.sin(self.theta_mesh)).flatten()
@@ -40,7 +41,7 @@ class Pol2Cart:
         if A.shape != self.r_mesh.shape:
             print('input format does not have the right shape')
         else:
-            A_out = np.zeros((self.N_x, self.N_y), dtype=A.dtype)
+            A_out = np.zeros((self.Nx, self.Ny), dtype=A.dtype)
             A_flat = A.flatten()
             for i in range(0, A_flat.size):
                 mapped_i = self.x_cart_indices[i]
@@ -52,26 +53,30 @@ class Pol2Cart:
 class Bathymetry:
     def __init__(self, x, y):
         dy = y[1] - y[0]
-        y1 = np.arange(400, 750 + dy, dy)
-        y2 = np.arange(800, 950 + dy, dy)
-        y3 = np.arange(1000, 1100 + dy, dy)
+        y1 = np.arange(400, 500 + dy, dy)
+        y2 = np.arange(550, 700 + dy, dy)
+        y3 = np.arange(750, 1100 + dy, dy)
         y_u = np.block([y1, y2, y3])
         self.x = x
         self.y = y
-        self.N_x = len(self.x)
-        self.N_y = len(self.y)
-        bathy1 = -25 * (y_u<=750)
-        bathy2 = (0.1*y_u-100)*(np.logical_and(y_u>=800, y_u<= 950))
-        bathy3 = -2*(y_u>=1000)
+        self.Nx = len(self.x)
+        self.Ny = len(self.y)
+        '''
+        bathy1 = -25 * (y_u<=500)
+        bathy2 = (-0.33*y_u+140)*(np.logical_and(y_u>=550, y_u<= 700))
+        bathy3 = -100*(y_u>=750)
+        '''
+        bathy1 = -2 * (y_u<=500)
+        bathy2 = (-0.1*y_u+50)*(np.logical_and(y_u>=550, y_u<= 700))
+        bathy3 = -25*(y_u>=750)
         bathy = bathy1 + bathy2 + bathy3
         h_func = interp1d(y_u, bathy, kind='cubic')
         self.h = h_func(y)
         self.H = -np.outer(np.ones(len(x)), self.h) 
-        #TODO: should coordinate system be changed to have x parallel to beach?
         
     def plot1d(self):
         plt.figure()
-        plt.plot(self.x, self.h, 'x')
+        plt.plot(self.y, self.h, 'x')
         
     def plot2d(self):
         X, Y= np.meshgrid(self.x, self.y, indexing='ij')
@@ -86,7 +91,7 @@ class Bathymetry:
         for i in range(N_f):
         #kt = np.zeros(len(self.h))
         #   for j in range(0, len(self.h)):
-            #kt = np.abs(fsolve(lambda k: ((2*np.pi*f_r[i,0])**2 - 9.81*k*np.tanh(k*(-self.h)) ), 0.01*np.ones(self.N_x), xtol=0.01))
+            #kt = np.abs(fsolve(lambda k: ((2*np.pi*f_r[i,0])**2 - 9.81*k*np.tanh(k*(-self.h)) ), 0.01*np.ones(self.Nx), xtol=0.01))
             
             w = 2*np.pi*f_r[i,0]
             ki = w**2/(9.81)
@@ -103,7 +108,7 @@ class Bathymetry:
                 
             #kt = (2*np.pi*f_r[i,0])**2 - 9.81*k*np.tanh(k*(-self.h)) )
             
-            k_out[i,:,:] = np.outer(ki, np.ones(self.N_y))
+            k_out[i,:,:] = np.outer(np.ones(self.Nx), ki)
         return k_out
             
 
@@ -114,11 +119,11 @@ class DirectionalSpectrum:
         self.theta_p = theta_p
         self.gam = gam
         g = 9.81        
-        U = lambda UU: 3.5*(g/UU)*(g/UU**2*F)**(-0.33)-fp
+        U = lambda UU: 3.5*(g/UU)*(g/UU**2*F)**(-0.33)-self.fp
         self.U10 = fsolve(U, 10,  xtol=1e-04)[0]
         self.xxn = g/self.U10**2*F
         self.S = lambda f:(0.076*self.xxn**(-0.22)*g**2/(2*np.pi)**4*(f)**(-5)*np.exp(-5/4*(self.fp/f)**4)
-         *gam**np.exp(-((f-self.fp)**2)/(2*(fp*(0.07*(1/2 + 1/2*np.sign(self.fp - f))
+         *gam**np.exp(-((f-self.fp)**2)/(2*(self.fp*(0.07*(1/2 + 1/2*np.sign(self.fp - f))
         +0.09*(1/2 -1/2*np.sign(self.fp - f))))**2)))
                 
         self.s = lambda f:((c*(2*np.pi*self.fp*self.U10/g)**(-2.5)*(f/self.fp)**5)*(1/2 + 1/2*np.sign(self.fp - f)) +
@@ -149,7 +154,7 @@ class DirectionalSpectrum:
         plt.xlabel(r'$f~[Hz]$')
         plt.ylabel(r'$\theta$')
         
-    def seed_f(self, f_min, f_max, N_f, plot_it=True):
+    def seed_f(self, f_min, f_max, N_f, plot_it=False):
         #'''
         f = []
         while len(f)<N_f:
@@ -204,7 +209,7 @@ class DirectionalSpectrum:
         return ff, Theta
     
     
-    def define_realization(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=True):
+    def define_realization(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=False):
         f_r, Theta_r = self.seed_f_theta(f_min, f_max, theta_min, theta_max, N_f, N_theta)
         #print('theta seeded')
         #Q = quad(self.S, f_min, f_max)[0]
@@ -272,11 +277,11 @@ class SpectralRealization:
             plt.figure()
             plt.plot(k_loc[:,0,0], self.f_r[:,0])
             if bathy!=None:
-                for i in range(1,bathy.N_x):
-                    plt.plot(k_loc[:,i,0], self.f_r[:,0])
+                for i in range(1,bathy.Ny):
+                    plt.plot(k_loc[i,:,0], self.f_r[:,0])
         return k_loc
                 
-    def invert(self, bathy, t, x, y, h=1000):
+    def invert(self, bathy, ti, x, y, h=1000, plot_it=False):
         # es sollte hier 2 Methoden geben: das argument des cos zu kartesischen konvertieren
         # man könnte auch einfach auf dem kart. System arbeiten (uniform) und dann nur die richtigen as dran multiplizieren. Dann bräuchte man vorher sicher auch die integrale nicht?
         # natürlich könnte man auch einfach zu Polarkoordinaten transferieren
@@ -287,17 +292,16 @@ class SpectralRealization:
         Ny = len(y)
         k = self.calc_wavenumber(Nx, Ny, bathy)
         print('wavenumber calculated')
-        w = 2*np.pi*self.f_r
+        w = 2*np.pi*self.f_r    
+
+        X, Y = np.meshgrid(x, y, indexing='ij')
+        theta = self.Theta_r
+        dy = np.gradient(y)
+        
         if not bathy is  None:
             H = bathy.H
         else:
             H = h
-        
-        ti = 0#t[0]
-        X, Y = np.meshgrid(x, y, indexing='ij')
-        theta = self.Theta_r
-        dx = np.gradient(x)
-
         
         zeta = np.zeros((Nx, Ny))
         #phase = np.random.uniform(size=self.N_f)*np.pi*2
@@ -305,29 +309,28 @@ class SpectralRealization:
         for i in range(0, self.N_f):
             k2H_by_sinh_2kH = np.where(k[i,:,:]*H < 50,  2*k[i,:,:]*H / np.sinh(2*k[i,:,:]*H), 0)
             for j in range(0, self.N_theta):
-                thetaxy = np.abs(np.arcsin(np.sin(theta[i,j])*k[i,0,0]/k[i,:,:]))
-                kx = k[i,:,:] * np.cos(thetaxy)
-                ksh = np.cumsum(kx[:,1])*dx
+                thetaxy = np.abs(np.arcsin(np.sin(theta[i,j])*k[i,-1,-1]/k[i,:,:]))
+                ky = k[i,:,:] * np.cos(thetaxy)
+                ksh = np.cumsum(ky[0,:])*dy
                 Cgx =  w[i,j]/(2*k[i,:,:] * (1+k2H_by_sinh_2kH))*(np.cos(thetaxy))
-                Cg0x = w[i,j]/(2*k[i,0,0] * (1+k2H_by_sinh_2kH[0,0]))*(np.cos(theta[i,j]))
+                Cg0x = w[i,j]/(2*k[i,-1,-1] * (1+k2H_by_sinh_2kH[-1,-1]))*(np.cos(theta[i,j]))
                 phase = np.random.uniform()*np.pi*2
-                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase-k[i,1,1]*np.sin(theta[i,j])*Y
-                +np.outer(ksh, np.ones(Ny)))
-        plotting_interface.plot_3d_as_2d(x, y, zeta)
-        '''        
-        fig = plt.figure(figsize=(14,8))
-        ax = fig.gca(projection='3d')
-        surf = ax.plot_surface(X, Y, zeta, cmap=cm.coolwarm, linewidth=0, antialiased=True)
-        #fig.colorbar(surf, shrink=0.5, aspect=5)
-        #plt.imshow(zeta)
-        #plt.colorbar()
-        '''
-        #'''
-        plt.figure()
-        plt.plot(zeta[:,400])
-        plt.figure()
-        plt.plot(zeta[150,:])
-        #'''            
+                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase+w[i, j]*ti-k[i,-1,-1]*np.sin(theta[i,j])*X
+                +np.outer(np.ones(Nx), ksh))
+        if plot_it:
+            plotting_interface.plot_3d_as_2d(x, y, zeta)
+            plt.colorbar()
+            plt.xlabel('$x~[\mathrm{m}]$')
+            plt.xlabel('$y~[\mathrm{m}]$')
+            plt.figure()
+            plt.plot(x, zeta[:,150])
+            plt.xlabel('$x~[\mathrm{m}]$')
+            plt.ylabel('$\eta~[\mathrm{m}]$')
+            plt.figure()
+            plt.plot(y, zeta[400,:])
+            plt.xlabel('$y~[\mathrm{m}]$')
+            plt.ylabel('$\eta~[\mathrm{m}]$')
+        return zeta
                 
 
     
@@ -336,8 +339,8 @@ if __name__=='__main__':
 
     dx = 2
     dy = dx
-    x = np.arange(400, 1100 + dx, dx)
-    y = np.arange(-500, 500 + dy, dy)
+    x = np.arange(-500, 500 + dx, dx)
+    y = np.arange(400, 1100 + dy, dy)
     g = 9.81
     Tp = 10
     fp = 1./Tp
@@ -362,20 +365,8 @@ if __name__=='__main__':
     print('Bathymetry defined')
     #b.plot1d()
     #b.plot2d()
-    #k_b = realization.calc_wavenumber(b, plot_it=True)
-    '''
-    theta = np.array([0.4, 0.6, 0.1])
-    r = np.array([500, 550, 600, 700, 800])
-    test = Pol2Cart(r, theta, x, y)
-    x_pol = np.outer(r, np.cos(theta))
-    y_pol = np.outer(r, np.sin(theta))
-    print('x_pol = ', x_pol)
-    print('y_pol = ', y_pol)
-    print(test.transform(x_pol))
-    '''
-    realization.invert(b, 0, x, y)
-    
-    
+    #plt.show()
+    zeta = realization.invert(b, 0, x, y)    
     
     plt.show()
     

@@ -429,7 +429,46 @@ class SpectralRealization:
         surf = surface_core.Surface(surf_name, eta, [x,y])
         return surf
 
-
+def shoaling_case(surf_name='shoaling_surface', save=False):
+    from wave_tools import shoaling
+    dt = 2.
+    T = 15*60
+    t = np.arange(0, T, dt)
+    dx = 2
+    dy = dx
+    x = np.arange(-500, 500 + dx, dx)
+    y = np.arange(400, 1100 + dy, dy)
+    Nt = len(t)
+    Nx = len(x)
+    Ny = len(y)
+    g = 9.81
+    Tp = 10
+    fp = 1./Tp
+    theta_p = -5*np.pi/180
+    gam = 3.3
+    N_f = 100
+    f_min = 0.001
+    f_max = 0.4
+    N_theta = 40
+    theta_min = -np.pi
+    theta_max = np.pi
+    c = 50
+    F = 300000
+    
+    DirSpec = shoaling.DirectionalSpectrum(Tp, theta_p, gam, c, F)
+    realization = shoaling.SpectralRealization(DirSpec, f_min, f_max, theta_min, theta_max, N_f, N_theta)
+    b = shoaling.Bathymetry(x, y)
+    #b.plot1d()
+    #b.plot2d()
+    #plt.show()
+    eta = np.zeros((Nt,Nx,Ny))
+    for i in range(0, Nt):
+        eta[i,:,:] = realization.invert(b, t[i], x, y)    
+    surf = surface_core.Surface(surf_name, eta, [t, x,y])
+    if save:
+        surf.save('../../Data/SimulatedWaves/shoaling_windsea_res{0:1.1f}_dt{1:1.1f}_T{2:d}_U0_surf3d.hdf5'.format(dx, dt, T))
+    return surf
+    
 
 if __name__=='__main__':
     t = np.linspace(0,100, 200)
@@ -499,6 +538,7 @@ if __name__=='__main__':
     '''
 
     #JONSWAP 3D similar to Pavel for 2D
+    '''
     dx = 7.5
     dy = 7.5
     dt = 1.
@@ -512,6 +552,7 @@ if __name__=='__main__':
     Uy = 0
     surf3d = JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, Ux, Uy)
     surf3d.plot_3d_as_2d(0)
+    '''
 
     # asymmetric Jonswap
     '''
@@ -519,6 +560,9 @@ if __name__=='__main__':
     surf3d_asym = JonswapWave3D_asymetric(t, x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h)
     surf3d_asym.plot_3d_as_2d(0)
     '''
+
+    # shoaling JONSWAP
+    shoaling_case(save=True)
 
     plt.show()
 

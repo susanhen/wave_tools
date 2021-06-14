@@ -13,8 +13,8 @@ class SeaSurface(unittest.TestCase):
         self.name = r'$\eta$'
         self.Nx = 64#1024
         self.Ny = 64#2*1024
-        self.x = np.linspace(-250, 250, self.Nx)
-        self.y = np.linspace(0, 500, self.Ny)
+        self.x = np.linspace(-250, 250, self.Nx, endpoint=True)
+        self.y = np.linspace(0, 500, self.Ny, endpoint=True)
         self.kx = 0.0#66
         self.ky = 0.066
         self.k = np.sqrt(self.kx**2 + self.ky**2)
@@ -42,8 +42,7 @@ class SeaSurface(unittest.TestCase):
         for i in range(0, self.Nx):
             self.assertAlmostEqual(self.x[i], surf2d_inversion.etaND.x[i])        
         for i in range(0, self.Ny):
-            self.assertAlmostEqual(self.y[i], surf2d_inversion.etaND.y[i])
-            
+            self.assertAlmostEqual(self.y[i], surf2d_inversion.etaND.y[i])            
         
     def test_name(self):
         self.assertEqual(self.name, self.surf2d.get_name())
@@ -130,6 +129,37 @@ class SeaSurface(unittest.TestCase):
         for j in range(int(0.1*inter_factor_y*Ny), int(0.9*inter_factor_y*Ny)):
             self.assertAlmostEqual(np.round(eta2d[50,j],1), np.round(surf2d_interpol.eta[50,j],1))
             self.assertAlmostEqual(np.round(y[j],2), np.round(surf2d_interpol.y[j],2))
+
+
+    def test_get_sub_surface(self):
+        Nx = 128
+        Ny = 128
+        x = np.linspace(-500, 500, Nx, endpoint=True)
+        y = np.linspace(0, 500, Ny, endpoint=True)
+        xx, yy = np.meshgrid(x, y, indexing='ij')
+        eta2d = 5*np.sin(self.kx*xx + self.ky*yy)
+        surf2d = surface_core.Surface('test', eta2d, [x,y])  
+        sub_surf = surf2d.get_sub_surface('sub_surf', [-250, 250, 0, 500], dx_new=self.surf2d.etaND.dx, dy_new=self.surf2d.etaND.dy)      
+        # 3D
+        Nt = 3
+        eta3d = np.zeros((Nt, Nx, Ny))
+        fake_t = np.arange(0,Nt)
+        for i in range(0, Nt):            
+            eta3d[i,:,:] = 5*np.sin(self.kx*xx + self.ky*yy )
+        surf3d = surface_core.Surface('surf3d', eta3d, [fake_t, x, y])
+        sub_3d = surf3d.get_sub_surface('sub_surf2', [-250, 250, 0, 500], dx_new=self.surf2d.etaND.dx, dy_new=self.surf2d.etaND.dy)  
+
+        # Test
+        for i in range(0, self.Nx):
+            self.assertAlmostEqual(sub_surf.etaND.x[i], self.x[i], 2, 0.01)
+            self.assertAlmostEqual(sub_3d.etaND.x[i], self.x[i], 2, 0.01)
+            self.assertAlmostEqual(sub_surf.eta[i, 50], self.surf2d.eta[i, 50], 2, 0.01)
+            self.assertAlmostEqual(sub_3d.eta[0, i, 50], self.surf2d.eta[i, 50], 3, 0.001)
+        for i in range(0, self.Ny):
+            self.assertAlmostEqual(sub_surf.etaND.y[i], self.y[i], 1, 0.1)
+            self.assertAlmostEqual(sub_3d.etaND.y[i], self.y[i], 1, 0.1)
+            self.assertAlmostEqual(sub_surf.eta[30,i], self.surf2d.eta[30,i], 2, 0.01)
+            self.assertAlmostEqual(sub_3d.eta[0,30,i], self.surf2d.eta[30,i], 3, 0.001)
 
         
     def test_shadowing(self):
