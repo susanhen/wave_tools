@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import polarTransform
 from help_tools import plotting_interface, polar_coordinates
 import h5py
+from fractions import Fraction
+import scipy
 
 class _Surface1D(object):
     '''
@@ -20,18 +22,16 @@ class _Surface1D(object):
         self.dx = self.x[1]-self.x[0]      
 
     def fft_interpolate(self, inter_factor_x): 
-        # TODO: test!
         return fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x*self.N)
 
     def get_sub_surface(self, extent, dx_new):
-        # TODO: test
         interpol_dx = 0.5
         if dx_new is not None:
             inter_factor_x = int(self.dx/interpol_dx)
             x_new, eta_new = fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x)
         x_ind1 = np.argmin(np.abs(x_new - extent[0]))
         x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
-        x_spacing = int(interpol_dx/dx_new)
+        x_spacing = int(dx_new/interpol_dx)
         return [x_new[x_ind1:x_ind2:x_spacing]], eta_new[x_ind1:x_ind2:x_spacing]
         
     def get_r_grid(self):
@@ -184,7 +184,7 @@ class _Surface2D(object):
     def get_deta_dy(self):
         deta_dx, deta_dy = np.gradient(self.eta, self.x, self.y)
         return deta_dy
-    
+
     def plot_3d_surface(self):
         plotting_interface.plot_3d_surface(self.x, self.y, self.eta)
 
@@ -196,26 +196,28 @@ class _Surface2D(object):
         return  [x_inter, y_inter], eta_inter
 
     def get_sub_surface(self, extent, dx_new, dy_new):
-        interpol_dx = 0.5
-        interpol_dy = 0.5
-        if dx_new is not None or dy_new is not None:
-            if dx_new is None:
-                dx_new = self.dx
-                interpol_dx = self.dx
-            if dy_new is None:
-                dy_new = self.dy
-                interpol_dy = self.dy
-            inter_factor_x = int(self.dx/interpol_dx)
-            inter_factor_y = int(self.dy/interpol_dy)
+        if dx_new is None:
+            dx_new = self.dx
+        if dy_new is None:
+            dy_new = self.dy
+        frac_x = Fraction(dx_new/self.dx).limit_denominator(4)
+        inter_factor_x = frac_x.denominator
+        x_spacing = frac_x.numerator
+        frac_y = Fraction(dy_new/self.dy).limit_denominator(4)
+        inter_factor_y = frac_y.denominator
+        y_spacing = frac_y.numerator
+        if inter_factor_x>1 or inter_factor_y>1:
             grid_new, eta_new = self.fft_interpolate(inter_factor_x, inter_factor_y)
             x_new, y_new = grid_new
-        x_ind1 = np.argmin(np.abs(x_new - extent[0]))
-        x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
-        y_ind1 = np.argmin(np.abs(y_new - extent[0]))
-        y_ind2 = np.argmin(np.abs(y_new - extent[1]))+1
-        x_spacing = int(interpol_dx/dx_new)
-        y_spacing = int(interpol_dy/dy_new)
-        return [x_new[x_ind1:x_ind2:x_spacing], y_new[y_ind1:y_ind2:y_spacing]], eta_new[x_ind1:x_ind2:x_spacing,y_ind1:y_ind2:y_spacing] 
+        else:
+            x_new = self.x
+            y_new = self.y
+            eta_new = self.eta     
+        x_out = np.arange(extent[0], extent[1]+dx_new/2, dx_new)
+        y_out = np.arange(extent[2], extent[3]+dy_new/2, dy_new)
+        interpol_eta = scipy.interpolate.RectBivariateSpline(x_new, y_new, eta_new)
+        eta_out = interpol_eta(x_out, y_out)           
+        return [x_out, y_out], eta_out 
 
     def get_local_incidence_angle(self, H, approx=False):
         deta_dx = self.get_deta_dx()
@@ -371,12 +373,6 @@ class _Surface3D(object):
         hf.attrs['ND'] = 3
         hf.close()
 
-    def get_surf2d_at_index(self, time_index, name):
-        '''
-        Returns a 2d surface for the given time index
-        '''
-        return Surface(name+'_at_{0:.2f}'.format(self.t[time_index]), self.eta[time_index,:,:], [self.x, self.y])
-
     def get_surf2d_at_ti(self, ti, name):
         time_index = np.argmin(np.abs(self.t-ti))
         return self.get_surf2d_at_index(time_index, name)
@@ -429,6 +425,30 @@ class _Surface3D(object):
         x_spacing = int(interpol_dx/dx_new)
         y_spacing = int(interpol_dy/dy_new)
         return [self.t, x_new[x_ind1:x_ind2:x_spacing], y_new[y_ind1:y_ind2:y_spacing]], eta_new[:, x_ind1:x_ind2:x_spacing, y_ind1:y_ind2:y_spacing]     
+
+
+    def get_surf2d_at_index(self, time_index):
+        '''
+        Returns a 2d surface for the given time index (only 3d surfaces)
+        '''
+ 
+        return Surface('noName', self.eta[time_index,:,:], [self.x, self.y])
+
+    def get_sub_surface(self, extent, dt_new, dx_new, dy_new):
+        if dt_new is not None:
+            print('\nError: The interpolation of the temporal domain has not yet been implemented\n')
+            return None
+        eta_out = []
+        this_surf2d = self.get_surf2d_at_index(0)
+        sub_surf = this_surf2d.get_sub_surface('noName', extent, dx_new, dy_new)
+        x_out = sub_surf.etaND.x
+        y_out = sub_surf.etaND.y
+        eta_out.append(sub_surf.eta)
+        for i in range(1, self.Nt):
+            this_surf2d = self.get_surf2d_at_index(i)
+            sub_surf = this_surf2d.get_sub_surface('noName', extent, dx_new, dy_new)
+            eta_out.append(sub_surf.eta)
+        return [self.t, x_out, y_out], np.array(eta_out)   
 
 
 class Surface(object):
@@ -519,9 +539,12 @@ class Surface(object):
         elif self.ND==3:
             return self.etaND.get_surf(x_sub, y_sub, z_sub)
 
-    def get_surf2d_at_index(self, time_index, name):
-        if self.ND==3:
-            return self.etaND.get_surf2d_at_index(time_index, name)
+    def get_surf2d_at_index(self, time_index):
+        '''
+        Returns a 2d surface for the given time index (only 3d surfaces)
+        '''
+        if self.ND==3:  
+            return Surface(self.name+'_at_{0:.2f}'.format(self.t[time_index]), self.eta[time_index,:,:], [self.x, self.y])
         else:
             return NotImplemented
 
