@@ -1,6 +1,6 @@
 import numpy as np
 from wave_tools import find_peaks, find_freak_waves, fft_interface, SpectralAnalysis, fft_interpolate
-import pylab as plt
+import matplotlib.pyplot as plt
 import polarTransform
 from help_tools import plotting_interface, polar_coordinates
 import h5py
@@ -17,22 +17,31 @@ class _Surface1D(object):
         else:
             self.x=grid
         self.N = len(self.x)
-        self.dx = self.x[1]-self.x[0]
+        self.dx = self.x[1]-self.x[0]      
+
+    def fft_interpolate(self, inter_factor_x): 
+        # TODO: test!
+        return fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x*self.N)
+
+    def get_sub_surface(self, extent, dx_new):
+        # TODO: test
+        interpol_dx = 0.5
+        if dx_new is not None:
+            inter_factor_x = int(self.dx/interpol_dx)
+            x_new, eta_new = fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x)
+        x_ind1 = np.argmin(np.abs(x_new - extent[0]))
+        x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
+        x_spacing = int(interpol_dx/dx_new)
+        return [x_new[x_ind1:x_ind2:x_spacing]], eta_new[x_ind1:x_ind2:x_spacing]
         
     def get_r_grid(self):
         return np.abs(self.x)           
 
-    def get_deta_dx(self, cut_off_kx=None):
-        kx, eta_fft = fft_interface.physical2spectral(self.eta, [self.x])
-        if cut_off_kx is None:
-            cut_off_kx = kx[-1]
-        kx_cut = np.where(np.abs(kx)<cut_off_kx, kx, 0)
-        deta_dx_fft = 1.0j*kx_cut*eta_fft
-        tmp_x, deta_dx = fft_interface.spectral2physical(deta_dx_fft, [kx])
-        return deta_dx   
+    def get_deta_dx(self):
+        return np.gradient(self.eta, self.x)
 
-    def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
-        deta_dx = self.get_deta_dx(k_cut_off)
+    def get_local_incidence_angle(self, H, approx=False):
+        deta_dx = self.get_deta_dx()
         r = np.abs(self.x)        
         if approx:
             n_norm = 1
@@ -167,34 +176,14 @@ class _Surface2D(object):
     def get_r_grid(self):        
         x_mesh, y_mesh = np.meshgrid(self.x, self.y, indexing='ij')
         return np.sqrt(x_mesh**2 + y_mesh**2)
-        
-    def get_deta_dx(self, cut_off_kx=None):
-        kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x, self.y])
-        if cut_off_kx is None:
-            cut_off_kx = kx[-1]
-        #TODO: this depends on the indexing can you make a check when initializing the surface?
-        kx_cut = np.where(np.abs(kx)<cut_off_kx, kx, 0)
-        kx_mesh = np.outer(kx_cut, np.ones(len(ky)))
-        #kx_mesh = np.outer(np.ones(len(ky)), kx)
-        deta_dx_fft = 1.0j*kx_mesh*eta_fft
-        tmp_x, tmp_y, deta_dx = fft_interface.spectral2physical(deta_dx_fft, [kx, ky])
-        return deta_dx    
-          
-    def get_deta_dy(self, cut_off_ky=None):
-        kx, ky, eta_fft = fft_interface.physical2spectral(self.eta, [self.x, self.y])
 
-        if cut_off_ky is None:
-            cut_off_ky = ky[-1]
-        #TODO: this depends on the indexing can you make a check when initializing the surface?
-        ky_cut = np.where(np.abs(ky)<cut_off_ky, ky, 0)
-        if cut_off_ky==None:
-            ky_mesh = np.outer(np.ones(len(kx)), ky)
-        else:
-            ky_mesh = np.outer(np.ones(len(kx)), ky_cut)
-        #ky_mesh = np.outer(ky, np.ones(len(kx)))
-        deta_dy_fft = 1j*ky_mesh*eta_fft
-        tmp_x, tmp_y, deta_dy = fft_interface.spectral2physical(deta_dy_fft, [kx, ky])
-        return deta_dy  
+    def get_deta_dx(self):
+        deta_dx, deta_dy = np.gradient(self.eta, self.x, self.y)
+        return deta_dx
+
+    def get_deta_dy(self):
+        deta_dx, deta_dy = np.gradient(self.eta, self.x, self.y)
+        return deta_dy
     
     def plot_3d_surface(self):
         plotting_interface.plot_3d_surface(self.x, self.y, self.eta)
@@ -203,30 +192,34 @@ class _Surface2D(object):
         plotting_interface.plot_3d_as_2d(self.x, self.y, self.eta)
             
     def fft_interpolate(self, inter_factor_x, inter_factor_y):
-        '''
-        Interpolate eta by truncated Fourier expansion
-        
-        Parameters:
-        -----------
-        input
-                inter_factor_x      int
-                                    interpolated Nx = Nx*inter_factor_x
-                inter_factor_y      int
-                                    interpolated Ny = Ny*inter_factor_y
-        output 
-                surface_inter       object
-                                    instance of Surface class with interpolated eta and grid
-        ''' 
         x_inter, y_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x, self.y, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
-        return Surface('noName_inter', eta_inter, [x_inter, y_inter]) 
+        return  [x_inter, y_inter], eta_inter
 
-    def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
-        if k_cut_off is None:
-            deta_dx = self.get_deta_dx(None)
-            deta_dy = self.get_deta_dy(None)
-        else:
-            deta_dx = self.get_deta_dx(k_cut_off[0])
-            deta_dy = self.get_deta_dy(k_cut_off[1])
+    def get_sub_surface(self, extent, dx_new, dy_new):
+        interpol_dx = 0.5
+        interpol_dy = 0.5
+        if dx_new is not None or dy_new is not None:
+            if dx_new is None:
+                dx_new = self.dx
+                interpol_dx = self.dx
+            if dy_new is None:
+                dy_new = self.dy
+                interpol_dy = self.dy
+            inter_factor_x = int(self.dx/interpol_dx)
+            inter_factor_y = int(self.dy/interpol_dy)
+            grid_new, eta_new = self.fft_interpolate(inter_factor_x, inter_factor_y)
+            x_new, y_new = grid_new
+        x_ind1 = np.argmin(np.abs(x_new - extent[0]))
+        x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
+        y_ind1 = np.argmin(np.abs(y_new - extent[0]))
+        y_ind2 = np.argmin(np.abs(y_new - extent[1]))+1
+        x_spacing = int(interpol_dx/dx_new)
+        y_spacing = int(interpol_dy/dy_new)
+        return [x_new[x_ind1:x_ind2:x_spacing], y_new[y_ind1:y_ind2:y_spacing]], eta_new[x_ind1:x_ind2:x_spacing,y_ind1:y_ind2:y_spacing] 
+
+    def get_local_incidence_angle(self, H, approx=False):
+        deta_dx = self.get_deta_dx()
+        deta_dy = self.get_deta_dy()
         r = self.get_r_grid()
         x_mesh, y_mesh = np.meshgrid(self.x, self.y, indexing='ij')
         if approx:
@@ -399,11 +392,11 @@ class _Surface3D(object):
         time_index = np.min(np.abs(self.t-ti))
         self.plot_surf2d_at_index(time_index, name, flat)
         
-    def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
+    def get_local_incidence_angle(self, H, approx=False):
         theta_l = np.zeros(self.eta.shape)
         for i in range(0, len(self.t)):
             surf2d = self.get_surf2d_at_index(i, '')
-            theta_l[i,:,:] = surf2d.get_local_incidence_angle(H, k_cut_off, approx)
+            theta_l[i,:,:] = surf2d.get_local_incidence_angle(H, approx)
         return theta_l
 
     def get_illumination_function(self, H):
@@ -412,6 +405,30 @@ class _Surface3D(object):
             surf2d = self.get_surf2d_at_index(i, '')
             illumination[i,:,:] = surf2d.get_illumination_function(H)
         return illumination
+
+    def get_sub_surface(self, extent, dt_new, dx_new, dy_new):
+        if dt_new is not None:
+            print('\nError: The interpolation of the temporal domain has not yet been implemented\n')
+            return None
+        interpol_dx = 0.5
+        interpol_dy = 0.5
+        if dx_new is not None or dy_new is not None:
+            if dx_new is None:
+                dx_new = self.dx
+                interpol_dx = self.dx
+            if dy_new is None:
+                dy_new = self.dy
+                interpol_dy = self.dy
+            inter_factor_x = int(self.dx/interpol_dx)
+            inter_factor_y = int(self.dy/interpol_dy)
+            x_new, y_new, eta_new = fft_interpolate.fft_interpol2d(self.x, self.y, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
+        x_ind1 = np.argmin(np.abs(x_new - extent[0]))
+        x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
+        y_ind1 = np.argmin(np.abs(y_new - extent[0]))
+        y_ind2 = np.argmin(np.abs(y_new - extent[1]))+1
+        x_spacing = int(interpol_dx/dx_new)
+        y_spacing = int(interpol_dy/dy_new)
+        return [self.t, x_new[x_ind1:x_ind2:x_spacing], y_new[y_ind1:y_ind2:y_spacing]], eta_new[:, x_ind1:x_ind2:x_spacing, y_ind1:y_ind2:y_spacing]     
 
 
 class Surface(object):
@@ -446,7 +463,19 @@ class Surface(object):
         self.eta = self.etaND.eta
 
     def copy(self, name):
-        return Surface(name, self.etaND.eta, self.grid, self.window_applied)        
+        return Surface(name, self.etaND.eta, self.grid, self.window_applied)    
+
+    def get_sub_surface(self, name, extent, dx_new=None, dy_new=None, dt_new=None):
+        if self.window_applied:
+            print('\nA window has been applied to the surface, creating a subsurface does not make sense \n')
+            return None
+        if self.ND==1:
+            grid, eta = self.etaND.get_sub_surface(extent, dx_new) 
+        if self.ND==2:
+            grid, eta = self.etaND.get_sub_surface(extent, dx_new, dy_new)            
+        if self.ND==3:
+            grid, eta = self.etaND.get_sub_surface(extent, dt_new, dx_new, dy_new)
+        return Surface(name, eta, grid, window_applied=False)
             
     def get_name(self):
         return self.name
@@ -502,21 +531,21 @@ class Surface(object):
         else:
             return NotImplemented            
       
-    def get_deta_dx(self, kx_cut_off):
+    def get_deta_dx(self):
         if self.ND==1:
-            return self.etaND.get_deta_dx(kx_cut_off)
+            return self.etaND.get_deta_dx()
         elif self.ND==2:
-            return self.etaND.get_deta_dx(kx_cut_off)
+            return self.etaND.get_deta_dx()
         elif self.ND==3:
-            return self.etaND.get_deta_dx(kx_cut_off)        
+            return self.etaND.get_deta_dx()        
           
-    def get_deta_dy(self, ky_cut_off):
+    def get_deta_dy(self):
         if self.ND==1:
-            return self.etaND.get_deta_dy(ky_cut_off)
+            return self.etaND.get_deta_dy()
         elif self.ND==2:
-            return self.etaND.get_deta_dy(ky_cut_off)
+            return self.etaND.get_deta_dy()
         elif self.ND==3:
-            return self.etaND.get_deta_dy(ky_cut_off)            
+            return self.etaND.get_deta_dy()            
               
     def get_r_grid(self):
         if self.ND==1:
@@ -567,18 +596,19 @@ class Surface(object):
                                     interpolated Nx = Nx*inter_factor_x
                 inter_factor_y      int
                                     interpolated Ny = Ny*inter_factor_y
-                inter_factor_z      int
-                                    interpolated Ny = Ny*inter_factor_z
+                inter_factor_t      int
+                                    interpolated Nt = Nt*inter_factor_t
         output 
                 surface_inter       object
                                     instance of Surface class with interpolated eta and grid
         '''
         if self.ND==1:
-            return self.etaND.fft_interpolate(inter_factor_x)
+            grid_new, eta_new = self.etaND.fft_interpolate(inter_factor_x)
         elif self.ND==2:
-            return self.etaND.fft_interpolate(inter_factor_x, inter_factor_y)
+            grid_new, eta_new = self.etaND.fft_interpolate(inter_factor_x, inter_factor_y)
         elif self.ND==3:
-            return self.etaND.fft_interpolate(inter_factor_t, inter_factor_x, inter_factor_y)        
+            grid_new, eta_new = self.etaND.fft_interpolate(inter_factor_t, inter_factor_x, inter_factor_y)        
+        return Surface('noName_inter', eta_new, grid_new, window_applied=False)
     
     def find_crests(self, axis, method='zero_crossing'): 
         '''
@@ -609,7 +639,7 @@ class Surface(object):
     def replace_eta(self, new_eta):
         self.etaND.eta =new_eta
 
-    def get_local_incidence_angle(self, H, k_cut_off=None, approx=False):
+    def get_local_incidence_angle(self, H, approx=False):
         '''
         Gets the local incidence angle based on the radar elevation H above the mean sea level
         Parameters:
@@ -621,7 +651,7 @@ class Surface(object):
                         True: the local incidence angle is approximated by assuming...
                         False(default): the local incidence angle is calculated exactly
         '''
-        return self.etaND.get_local_incidence_angle(H, k_cut_off, approx)
+        return self.etaND.get_local_incidence_angle(H, approx)
 
     def get_local_incidence_surface(self, name, H, k_cut_off=None, approx=False):
         '''
@@ -636,7 +666,7 @@ class Surface(object):
                         True: the local incidence angle is approximated by assuming...
                         False(default): the local incidence angle is calculated exactly
         '''
-        theta_l = self.etaND.get_local_incidence_angle(H, k_cut_off, approx)
+        theta_l = self.etaND.get_local_incidence_angle(H, approx)
         return Surface(name, theta_l, self.grid, self.window_applied)
         
     def get_geometric_shadowing(self, name, H):
@@ -682,8 +712,8 @@ class Surface(object):
         illumination_function = self.etaND.get_illumination_function(H)     
         return Surface(name, illumination_function*self.eta.copy(), self.grid)  
 
-    def get_local_incidence_angle_with_shadowing_surface(self, name, H, k_cut_off=None, approx=False):
-        theta_l = self.etaND.get_local_incidence_angle(H, k_cut_off, approx)
+    def get_local_incidence_angle_with_shadowing_surface(self, name, H, approx=False):
+        theta_l = self.etaND.get_local_incidence_angle(H, approx)
         illumination_function = self.etaND.get_illumination_function(H) 
         return Surface(name, illumination_function*theta_l, self.grid)  
         
@@ -727,10 +757,10 @@ class Surface(object):
         hf.create_dataset('illumination_{0:d}'.format(H), data=illumination)
         hf.close()
 
-    def add_local_incidence_angle_to_file(self, fn, H, k_cut_off, approx=False):
+    def add_local_incidence_angle_to_file(self, fn, H, approx=False):
         '''calculate local incidence angle and add it to file'''
         hf = h5py.File(fn, 'a')
-        loc_inc = self.get_local_incidence_angle(H, k_cut_off, approx)
+        loc_inc = self.get_local_incidence_angle(H, approx)
         hf.create_dataset('loc_inc_{0:d}'.format(H), data=loc_inc) 
         hf.close()  
 
