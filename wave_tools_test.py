@@ -26,7 +26,7 @@ class SeaSurface(unittest.TestCase):
         self.spec2d = self.surf2d.define_SpectralAnalysis(grid_cut_off)
                             
         if plot_it:
-            import pylab as plt
+            import matplotlib.pyplot as plt
             plt.figure()
             plt.imshow(self.eta)
             plt.figure()
@@ -58,7 +58,7 @@ class SeaSurface(unittest.TestCase):
         mat2_hat = np.fft.fftshift(np.fft.fft(mat2))/N
         Res2 = np.convolve(mat1_hat, mat2_hat)[self.Nx//2:self.Nx//2+self.Nx]
         if plot_it:
-            import pylab as plt
+            import matplotlib.pyplot as plt
             plt.subplot(2,1,1)
             plt.plot(Res1.real)
             plt.plot(Res2.real)
@@ -78,7 +78,7 @@ class SeaSurface(unittest.TestCase):
         F_mat2 = np.fft.fftshift(np.fft.fft2(mat2))/(self.Nx*self.Ny)
         Res2 = convolution.convolve2d(F_mat1, F_mat2)
         if plot_it:
-            import pylab as plt
+            import matplotlib.pyplot as plt
             plt.imshow(np.abs(Res1))
             plt.figure()
             plt.imshow(np.abs(Res2))
@@ -87,7 +87,50 @@ class SeaSurface(unittest.TestCase):
         for i in range(0, self.Nx):
             for j in range(0, self.Ny):
                 self.assertAlmostEqual(Res1[i,j], Res2[i,j])
-                
+
+    def test_fft_interpol(self, plot_it=False):
+        inter_factor_x = 4
+        inter_factor_y = 4
+        Nx = 1000
+        Ny = 1000
+        x = np.linspace(0,10*np.pi, inter_factor_x * Nx )
+        eta = np.sin(x)
+        x_coarse = x[::inter_factor_x]
+        eta_coarse = np.sin(x_coarse)
+        surf1d = surface_core.Surface('test', eta_coarse, [x_coarse])
+        surf1d_interpol = surf1d.fft_interpolate(inter_factor_x)
+        if plot_it:
+            import matplotlib.pyplot as plt
+            plt.plot(x,eta)
+            plt.plot(surf1d_interpol.x, surf1d_interpol.eta)
+        for i in range(int(0.1*Nx*inter_factor_x), int(0.9*Nx*inter_factor_x-10)):
+            self.assertAlmostEqual(np.round(eta[i],1), np.round(surf1d_interpol.eta[i],1))
+            self.assertAlmostEqual(np.round(x[i],2), np.round(surf1d_interpol.x[i],2))
+        y = np.linspace(0,10*np.pi, inter_factor_y * Ny)  
+        y_coarse = y[::inter_factor_y]           
+        kx = 1
+        ky = 1        
+        xx, yy = np.meshgrid(x, y, indexing='ij')
+        xx_coarse, yy_coarse = np.meshgrid(x_coarse, y_coarse, indexing='ij')
+        eta2d = np.sin(kx*xx + ky*yy)
+        eta2d_coarse = np.sin(kx*xx_coarse + ky*yy_coarse)
+        surf2d_coarse = surface_core.Surface('test2d', eta2d_coarse, [x_coarse, y_coarse])
+        surf2d_interpol = surf2d_coarse.fft_interpolate(inter_factor_x, inter_factor_y)
+        if plot_it:
+            import matplotlib.pyplot as plt
+            plt.figure()
+            plt.plot(x,eta2d[:,50])
+            plt.plot(surf2d_interpol.x, surf2d_interpol.eta[:,50])
+            plt.figure()
+            plt.plot(y, eta2d[20,:])
+            plt.plot(surf2d_interpol.y, surf2d_interpol.eta[20,:])
+            plt.show()
+        for i in range(int(0.1*inter_factor_x*Nx), int(0.9*inter_factor_x*Nx)):
+            self.assertAlmostEqual(np.round(x[i],2), np.round(surf2d_interpol.x[i],2))
+        for j in range(int(0.1*inter_factor_y*Ny), int(0.9*inter_factor_y*Ny)):
+            self.assertAlmostEqual(np.round(eta2d[50,j],1), np.round(surf2d_interpol.eta[50,j],1))
+            self.assertAlmostEqual(np.round(y[j],2), np.round(surf2d_interpol.y[j],2))
+
         
     def test_shadowing(self):
         H = 45.0
@@ -99,10 +142,10 @@ class SeaSurface(unittest.TestCase):
         grid_cut_off=[0.2, 0.2]
         
         '''
-        surf_theta_l_10 = self.surf2d.get_local_incidence_surface(10, k_cut_off=grid_cut_off, approx=False)
-        surf_theta_l_10_approx = self.surf2d.get_local_incidence_surface(10, k_cut_off=grid_cut_off, approx=True)
-        surf_theta_l_45 = self.surf2d.get_local_incidence_surface(45, k_cut_off=grid_cut_off, approx=False)
-        surf_theta_l_45_approx = self.surf2d.get_local_incidence_surface(45, k_cut_off=grid_cut_off, approx=True)
+        surf_theta_l_10 = self.surf2d.get_local_incidence_surface(10, approx=False)
+        surf_theta_l_10_approx = self.surf2d.get_local_incidence_surface(10, approx=True)
+        surf_theta_l_45 = self.surf2d.get_local_incidence_surface(45, approx=False)
+        surf_theta_l_45_approx = self.surf2d.get_local_incidence_surface(45, approx=True)
         spec_theta_l_10 = surf_theta_l_10.define_SpectralAnalysis()
         spec_theta_l_10.apply_HP_filter(HP_limits)
         surf_theta_l_10_filtered = spec_theta_l_10.invert('test1')
@@ -128,7 +171,7 @@ class SeaSurface(unittest.TestCase):
         
         #'''
         '''
-        import pylab as plt
+        import matplotlib.pyplot as plt
         plt.figure()
         plt.imshow(surf_theta_l_10_filtered.etaND.eta*180/np.pi)
         plt.colorbar()
@@ -142,7 +185,7 @@ class SeaSurface(unittest.TestCase):
         plt.colorbar()
         plt.show()
         '''
-        import pylab as plt
+        import matplotlib.pyplot as plt
         '''
         surf_theta_l_10.plot_3d_surface()
         surf_theta_l_10_approx.plot_3d_surface()
