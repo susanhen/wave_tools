@@ -22,9 +22,11 @@ class _Surface1D(object):
         self.dx = self.x[1]-self.x[0]      
 
     def fft_interpolate(self, inter_factor_x): 
+        # TODO: test!
         return fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x*self.N)
 
     def get_sub_surface(self, extent, dx_new):
+        # TODO: test
         interpol_dx = 0.5
         if dx_new is not None:
             inter_factor_x = int(self.dx/interpol_dx)
@@ -184,7 +186,6 @@ class _Surface2D(object):
     def get_deta_dy(self):
         deta_dx, deta_dy = np.gradient(self.eta, self.x, self.y)
         return deta_dy
-
     def plot_3d_surface(self):
         plotting_interface.plot_3d_surface(self.x, self.y, self.eta)
 

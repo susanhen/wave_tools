@@ -258,7 +258,36 @@ class SeaSurface(unittest.TestCase):
         plt.show()
         
 
+    def test_deta_dx(self):
+        xt = np.linspace(-50, 50, self.Nx*3)
+        yt = np.linspace(0, 100, self.Ny*3)
+        xxt, yyt = np.meshgrid(xt, yt, indexing='ij')
+        etat = 10*np.exp(-0.05*(xxt**2 + yyt**2))
+        tsts = surface_core.Surface('tsts', etat, [xt, yt])
 
+        dxapprox = tsts.get_deta_dx()
+        dyapprox = tsts.get_deta_dy()
+        dxexact = -0.5*2*xxt*np.exp(-0.05*(xxt**2 + yyt**2))
+        dyexact = -0.5*2*yyt*np.exp(-0.05*(xxt**2 + yyt**2))
+
+        for i in range(0, self.Nx):
+            for j in range(0, self.Ny):
+                self.assertAlmostEqual(dxapprox[i,j], dxexact[i,j], places=1)
+
+        for i in range(0, self.Nx):
+            for j in range(0, self.Ny):
+                self.assertAlmostEqual(dyapprox[i,j], dyexact[i,j], places=1)
+
+    def test_deta_dx1(self):
+        xt1 = np.linspace(-50, 50, self.Nx*3)
+        etat1 = 10*np.exp(-0.05*xt1**2)
+        tsts1 = surface_core.Surface('tsts1', etat1, [xt1])
+
+        dapprox = tsts1.get_deta_dx()
+        dexact = -0.5*2*xt1*np.exp(-0.05*xt1**2)
+
+        for i in range(0, self.Nx):
+            self.assertAlmostEqual(dapprox[i], dexact[i], places=1)
 
 
 if __name__ == '__main__':
