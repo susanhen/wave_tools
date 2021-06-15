@@ -22,19 +22,22 @@ class _Surface1D(object):
         self.dx = self.x[1]-self.x[0]      
 
     def fft_interpolate(self, inter_factor_x): 
-        # TODO: test!
         return fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x*self.N)
 
     def get_sub_surface(self, extent, dx_new):
-        # TODO: test
-        interpol_dx = 0.5
-        if dx_new is not None:
-            inter_factor_x = int(self.dx/interpol_dx)
-            x_new, eta_new = fft_interpolate.fft_interpol1d(self.x, self.eta, inter_factor_x)
-        x_ind1 = np.argmin(np.abs(x_new - extent[0]))
-        x_ind2 = np.argmin(np.abs(x_new - extent[1]))+1
-        x_spacing = int(dx_new/interpol_dx)
-        return [x_new[x_ind1:x_ind2:x_spacing]], eta_new[x_ind1:x_ind2:x_spacing]
+        if dx_new is None:
+            dx_new = self.dx
+        frac_x = Fraction(dx_new/self.dx).limit_denominator(4)
+        inter_factor_x = frac_x.denominator
+        if inter_factor_x>1:
+            x_new, eta_new = self.fft_interpolate(inter_factor_x)
+        else:
+            x_new = self.x
+            eta_new = self.eta     
+        x_out = np.arange(extent[0], extent[1]+dx_new/2, dx_new)
+        interpol_eta = scipy.interpolate.interp1d(x_new, eta_new)
+        eta_out = interpol_eta(x_out)           
+        return [x_out], eta_out
         
     def get_r_grid(self):
         return np.abs(self.x)           
@@ -55,7 +58,6 @@ class _Surface1D(object):
             cos_theta_l = (self.x*deta_dx + (H-self.eta))/(n_norm*b_norm)
         theta_l = np.arccos(cos_theta_l)
         return theta_l   
-
             
     def get_illumination_function(self, H):
         # Assuming that dimension is along the radar beam
@@ -203,10 +205,8 @@ class _Surface2D(object):
             dy_new = self.dy
         frac_x = Fraction(dx_new/self.dx).limit_denominator(4)
         inter_factor_x = frac_x.denominator
-        x_spacing = frac_x.numerator
         frac_y = Fraction(dy_new/self.dy).limit_denominator(4)
         inter_factor_y = frac_y.denominator
-        y_spacing = frac_y.numerator
         if inter_factor_x>1 or inter_factor_y>1:
             grid_new, eta_new = self.fft_interpolate(inter_factor_x, inter_factor_y)
             x_new, y_new = grid_new
