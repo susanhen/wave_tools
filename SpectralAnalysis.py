@@ -292,6 +292,19 @@ class _SpectralAnalysis2d(object):
         k_hp_filter = (k>limit).astype('int')
         self.coeffs *= k_hp_filter
         self.spectrum *= k_hp_filter
+
+    def get_1d_MTF(self, ky_only=False):
+        kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
+        ky_cut = np.where(np.abs(self.ky)<self.y_cut_off, self.ky, 0)
+        kx_mesh = np.outer(kx_cut, np.ones(self.Ny))
+        ky_mesh = np.outer( np.ones(self.Nx), ky_cut)
+        if ky_only:
+            MTF_inv = -1.0j*ky_mesh
+        else:
+            MTF_inv = -1.0j*np.sqrt(kx_mesh**2 + ky_mesh**2)
+        MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+        return MTF
+
         
     def get_2d_MTF(self, grid_offset):
         # TODO improve handling of cut_off to be set globally
@@ -323,8 +336,11 @@ class _SpectralAnalysis2d(object):
         MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
         return MTF  
 
-    def apply_MTF(self, grid_offset, percentage_of_max=0.01):
-        MTF = self.get_2d_MTF(grid_offset)
+    def apply_MTF(self, grid_offset, percentage_of_max=0.01, use_1D_MTF=False):
+        if use_1D_MTF:
+            MTF = self.get_1d_MTF(ky_only=False)
+        else:
+            MTF = self.get_2d_MTF(grid_offset)
         '''
         from help_tools import plotting_interface
         import pylab as plt
@@ -437,18 +453,22 @@ class _SpectralAnalysis3d(object):
         self.coeffs[self.Nt//2, self.Nx//2, self.Ny//2] = 0
         self.spectrum[self.Nt//2, self.Nx//2, self.Ny//2] = 0  
 
-    def get_w_slice(self, window_applied, grid_cut_off, w_limit, k_limit):
+    def get_w_slice(self, window_applied, grid_cut_off, w_limit, k_limit, N_average):
         '''
         spectral objects for all negative frequencies
         '''
         grid, coeffs_new, spec_new = self.get_sub_spec3d(w_limit, k_limit)
         w, kx, ky = grid
         Nw = len(w)
-        w_upper = w[Nw//2:]
+        w_upper = w[Nw//2+N_average//2:-N_average//2:N_average]
         spec2d_list = []
-        for i in np.arange(Nw//2, 0, -1):
-        #for i in np.arange(Nw//2, Nw):                    
-            spec2d_i = SpectralAnalysis(coeffs_new[i,:,:].copy(), spec_new[i,:,:].copy(), [kx, ky], window_applied=window_applied, grid_cut_off=grid_cut_off)
+        for i in np.arange(Nw//2 + N_average//2, N_average//2, -N_average):
+            coeffs_mean = np.zeros((len(kx), len(ky)), dtype=complex)
+            spec_mean = np.zeros((len(kx), len(ky)))
+            for j in range(-(N_average//2), N_average//2+1):       
+                coeffs_mean += coeffs_new[i+j,:,:].copy()
+                spec_mean += spec_new[i+j,:,:].copy()
+            spec2d_i = SpectralAnalysis(coeffs_mean/N_average, spec_mean/N_average, [kx, ky], window_applied=window_applied, grid_cut_off=grid_cut_off)
             spec2d_list.append(spec2d_i)
         return [w_upper, kx, ky], spec2d_list        
 
@@ -836,13 +856,13 @@ class SpectralAnalysis(object):
     def apply_MTF(self, grid_offset):
         self.spectrumND.apply_MTF(grid_offset)
 
-    def get_w_slice(self, w_limit=None, k_limit=None):
+    def get_w_slice(self, w_limit=None, k_limit=None, N_average=1):
         if self.ND == 3:
             if w_limit is None:
                 w_limit = self.w[-1]
             if k_limit is None:
                 k_limit = np.min(self.kx[-1], self.ky[-1])
-            return self.spectrumND.get_w_slice(self.window_applied, self.grid_cut_off, w_limit, k_limit)
+            return self.spectrumND.get_w_slice(self.window_applied, self.grid_cut_off, w_limit, k_limit, N_average)
         else:
             print('Error: get_w_slice is not implemented for dimensions lower than 3D')
 
