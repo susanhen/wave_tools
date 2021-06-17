@@ -27,7 +27,7 @@ def calc_wavenumber(w, h, Ueff, psi, Ntheta, Niter_max=200, eps=10**(-6)):
     g=9.81     
     theta = np.linspace(0, 2*np.pi, Ntheta)
     chosen_indices = None
-    if type(w) == float:
+    if type(w) == float or type(w)==int or type(w)==np.float64:
         ww = np.outer(w, np.ones(Ntheta))
         th = theta
     else:
@@ -47,8 +47,8 @@ def calc_wavenumber(w, h, Ueff, psi, Ntheta, Niter_max=200, eps=10**(-6)):
         wwt = np.sqrt(ki*g*np.tanh(ki*h))  + ki*Ueff*np.cos(phi)                       
         count = count + 1
     # map back to original size where 0 values could be included
-    if type(w) == float:
-        kk = ki
+    if type(w) == float or type(w)==int or type(w)==np.float64:
+        kk = ki[0,:]
     else:
         kk = np.zeros((len(w), Ntheta))
         kk[chosen_indices,:] = ki

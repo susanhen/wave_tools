@@ -126,6 +126,12 @@ class _SpectralAnalysis1d(object):
         coeffs_new = self.coeffs[kx_min_ind:kx_max_ind]
         spectrum_new = self.spectrum[kx_min_ind:kx_max_ind]
         return coeffs_new, spectrum_new, grid 
+
+    def get_MTF(self):
+        kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
+        MTF_inv = -1.0j*kx_cut
+        MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+        return MTF
         
 class _SpectralAnalysis2d(object):
     def __init__(self, coeffs, spectrum, k, grid_cut_off=None):
@@ -336,11 +342,8 @@ class _SpectralAnalysis2d(object):
         MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
         return MTF  
 
-    def apply_MTF(self, grid_offset, percentage_of_max=0.01, use_1D_MTF=False):
-        if use_1D_MTF:
-            MTF = self.get_1d_MTF(ky_only=False)
-        else:
-            MTF = self.get_2d_MTF(grid_offset)
+    def apply_MTF(self, grid_offset, percentage_of_max=0.01):
+        MTF = self.get_2d_MTF(grid_offset)
         '''
         from help_tools import plotting_interface
         import pylab as plt
@@ -351,6 +354,14 @@ class _SpectralAnalysis2d(object):
         threshold = percentage_of_max * np.max(np.abs(self.coeffs))
         self.coeffs = np.where(np.abs(self.coeffs)>threshold, self.coeffs* MTF, 0)
         self.spectrum = np.abs(self.coeffs)**2
+
+    def apply_1d_MTF(self, grid_offset, percentage_of_max=0.01, use_1D_MTF=False):
+
+        MTF = self.get_1d_MTF(ky_only=False)
+
+        threshold = percentage_of_max * np.max(np.abs(self.coeffs))
+        self.coeffs = np.where(np.abs(self.coeffs)>threshold, self.coeffs* MTF, 0)
+        self.spectrum = np.abs(self.coeffs)**2        
             
     def invert(self, name, grid_offset, window_applied):    
         x, y, eta_invers = fft_interface.spectral2physical(self.coeffs, [self.kx, self.ky])
@@ -460,9 +471,9 @@ class _SpectralAnalysis3d(object):
         grid, coeffs_new, spec_new = self.get_sub_spec3d(w_limit, k_limit)
         w, kx, ky = grid
         Nw = len(w)
-        w_upper = w[Nw//2+N_average//2:-N_average//2:N_average]
+        w_upper = w[Nw//2 + N_average//2 : -N_average//2 : N_average]
         spec2d_list = []
-        for i in np.arange(Nw//2 + N_average//2, N_average//2, -N_average):
+        for i in np.arange(Nw//2 - N_average//2, N_average//2, -N_average):
             coeffs_mean = np.zeros((len(kx), len(ky)), dtype=complex)
             spec_mean = np.zeros((len(kx), len(ky)))
             for j in range(-(N_average//2), N_average//2+1):       
@@ -628,7 +639,93 @@ class _SpectralAnalysis3d(object):
         #plt.plot(measured_k1[choose1], self.w[choose1], '--')
         #plt.plot(measured_k2[choose2], self.w[choose2], ':')
         plotting_interface.show()
+        
+    def estimate_Ueff_psi(w_list, h, Umax=1.0, N_average=3, plot_it=True, N_theta=360):
+        #TODO: should it be checked if anti_alising has been run?
+        grid, sped2d_list_extended = self.get_w_slice(None, k_limit, N_average)
+        w_upper_extended, kx, ky = grid
 
+       
+        # choose slice for given at_w
+        for at_w in w_list:
+            if at_w>np.max(w_upper_extended):
+                print('\n\nchosen w is too large, will be set to max(w)!!!\n\n')
+                at_w = np.max(self.w)
+            chosen_index = np.argmin(np.abs(w_upper_extended-at_w))    
+            at_w = w_upper_extended[chosen_index]
+            spec2d = sped2d_list_extended[chosen_index]
+            kx_ky_spec = spec2d.spectrum()
+            ker = 3
+            kernel = np.ones((ker,ker), np.float32)/ker**2
+            dst = cv2.filter2D(kx_ky_spec, -1, kernel)
+
+            kx_mesh, ky_mesh = np.meshgrid(kx, ky, indexing='ij')
+            k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
+            dw_max = k_mesh*Umax
+            spec_filt0 = np.where(np.abs(np.sqrt(k_mesh*9.81*np.tanh(k_mesh*h))-at_w)<dw_max, dst, 0)  
+            spec_filt = np.where(spec_filt0>0.1*np.max(spec_filt0), spec_filt0, 0)
+
+            U_eff_est, psi_est = helper_tools.estimate_U_eff_psi_directly(at_w, self.kx, self.ky, spec_filt, h, N_theta)
+
+
+            if plot_it:
+                spec2d.plot()
+
+    def get_1d_MTF(self, ky_only=False):
+        kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
+        ky_cut = np.where(np.abs(self.ky)<self.y_cut_off, self.ky, 0)
+        kx_mesh = np.outer(kx_cut, np.ones(self.Ny))
+        ky_mesh = np.ones((self.Nt, self.Nx)), ky_cut)
+        if ky_only:
+            MTF_inv = -1.0j*ky_mesh
+        else:
+            MTF_inv = -1.0j*np.sqrt(kx_mesh**2 + ky_mesh**2)
+        MTF2d = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+        MTF = np.outer(np.ones(self.Nt), MTF2d).reshape((self.Nt, self.Nx, self.Ny))
+        return MTF
+    
+    def get_2d_MTF(self, grid_offset):
+        # TODO improve handling of cut_off to be set globally
+        #TODO: this depends on the indexing can you make a check when initializing the surface?
+        kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
+        ky_cut = np.where(np.abs(self.ky)<self.y_cut_off, self.ky, 0)
+        kx_mesh = np.outer(kx_cut, np.ones(self.Ny))
+        ky_mesh = np.outer( np.ones(self.Nx), ky_cut)
+        #x, y, tmp_eta = fft_interface.spectral2physical(self.coeffs, [kx, ky])
+        x, dx = fft_interface.k2grid(self.kx)
+        y, dy = fft_interface.k2grid(self.ky)
+        x += grid_offset[0]
+        y += grid_offset[1]
+        x_mesh, y_mesh = np.meshgrid(x, y, indexing='ij')
+        r_mesh = np.sqrt(x_mesh**2 + y_mesh**2)
+        #kx_mesh = np.outer(np.ones(len(ky)), kx)
+        tmp1, tmp2, F_cos_theta = fft_interface.physical2spectral(x_mesh/r_mesh, [x, y])
+        tmp1, tmp2, F_sin_theta = fft_interface.physical2spectral(y_mesh/r_mesh, [x, y])
+        '''
+        import pylab as plt
+        plt.imshow(np.abs(F_cos_theta))
+        plt.figure()
+        plt.imshow(np.abs(F_sin_theta))
+        plt.show()
+        '''        
+        F_cos_theta *= np.sqrt(self.dkx*self.dky)
+        F_sin_theta *= np.sqrt(self.dkx*self.dky)
+        MTF_inv = -1.0j*(F_cos_theta[self.Nx//2, self.Ny//2]*kx_mesh + F_sin_theta[self.Nx//2, self.Ny//2]*ky_mesh)
+        MTF2d = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+        MTF = np.outer(np.ones(self.Nt), MTF2d).reshape((self.Nt, self.Nx, self.Ny))
+        return MTF  
+
+    def apply_MTF(self, grid_offset, percentage_of_max=0.01):
+        MTF = self.get_2d_MTF(grid_offset)
+        threshold = percentage_of_max * np.max(np.abs(self.coeffs))
+        self.coeffs = np.where(np.abs(self.coeffs)>threshold, self.coeffs* MTF, 0)
+        self.spectrum = np.abs(self.coeffs)**2
+
+    def apply_1d_MTF(self, grid_offset, percentage_of_max=0.01, use_1D_MTF=False):
+        MTF = self.get_1d_MTF(ky_only=False)
+        threshold = percentage_of_max * np.max(np.abs(self.coeffs))
+        self.coeffs = np.where(np.abs(self.coeffs)>threshold, self.coeffs* MTF, 0)
+        self.spectrum = np.abs(self.coeffs)**2 
 
     def invert(self, name, grid_offset, window_applied):    
         '''
@@ -851,10 +948,18 @@ class SpectralAnalysis(object):
         self.spectrumND.remove_zeroth()
         
     def get_2d_MTF(self, grid_offset):
-        if self.ND==2:
-            return self.spectrumND.get_2d_MTF(grid_offset)  
+        if self.ND==2 or self.ND==3:
+            return self.spectrumND.get_2d_MTF(grid_offset) 
+
+    def get_1d_MTF(self, grid_offset):
+        if self.ND==2 or self.ND==3:
+            return self.spectrumND.get_1d_MTF(grid_offset)
+
     def apply_MTF(self, grid_offset):
         self.spectrumND.apply_MTF(grid_offset)
+
+    def apply_1d_MTF(self, grid_offset):
+        self.spectrumND.apply_1d_MTF(grid_offset)
 
     def get_w_slice(self, w_limit=None, k_limit=None, N_average=1):
         if self.ND == 3:
@@ -899,6 +1004,26 @@ class SpectralAnalysis(object):
             return SpectralAnalysis(coeffs_extended, spectrum_extended, grid, self.grid_cut_off)
         else:
             print('Error: Not implemented')
+
+    def estimate_Ueff_psi(self, w_list):
+        '''
+        Estimate the current for the given spectrum.
+        The estimation is done separately for all provided w in w_list
+        Parameters:
+        -----------
+            input
+                    w_list      array
+                                all w for choosing corresponding w-slice
+            return
+                    Ueff        array
+                                effective currents for each w
+                    psi         array
+                                current direction in rad for each Ueff
+        '''
+        if self.ND==3:
+            return self.spectrumND.estimate_Ueff_psi(w_list)
+        else:
+            print('Error: Not available, the current estimation requires a 3d surface')
         
         
 
