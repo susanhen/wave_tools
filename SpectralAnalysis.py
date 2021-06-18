@@ -299,16 +299,18 @@ class _SpectralAnalysis2d(object):
         self.coeffs *= k_hp_filter
         self.spectrum *= k_hp_filter
 
-    def get_1d_MTF(self, ky_only=False):
+    def get_1d_MTF(self, ky_only):
         kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
         ky_cut = np.where(np.abs(self.ky)<self.y_cut_off, self.ky, 0)
         kx_mesh = np.outer(kx_cut, np.ones(self.Ny))
         ky_mesh = np.outer( np.ones(self.Nx), ky_cut)
+        k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
         if ky_only:
             MTF_inv = -1.0j*ky_mesh
         else:
-            MTF_inv = -1.0j*np.sqrt(kx_mesh**2 + ky_mesh**2)
-        MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+            MTF_inv = np.where(ky_mesh>0, -1j*k_mesh, 1j*k_mesh)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
         return MTF
 
         
@@ -339,7 +341,8 @@ class _SpectralAnalysis2d(object):
         F_cos_theta *= np.sqrt(self.dkx*self.dky)
         F_sin_theta *= np.sqrt(self.dkx*self.dky)
         MTF_inv = -1.0j*(F_cos_theta[self.Nx//2, self.Ny//2]*kx_mesh + F_sin_theta[self.Nx//2, self.Ny//2]*ky_mesh)
-        MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            MTF = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
         return MTF  
 
     def apply_MTF(self, grid_offset, percentage_of_max=0.01):
@@ -355,7 +358,7 @@ class _SpectralAnalysis2d(object):
         self.coeffs = np.where(np.abs(self.coeffs)>threshold, self.coeffs* MTF, 0)
         self.spectrum = np.abs(self.coeffs)**2
 
-    def apply_1d_MTF(self, grid_offset, percentage_of_max=0.01, use_1D_MTF=False):
+    def apply_1d_MTF(self, percentage_of_max=0.01, use_1D_MTF=False):
 
         MTF = self.get_1d_MTF(ky_only=False)
 
@@ -671,16 +674,18 @@ class _SpectralAnalysis3d(object):
             if plot_it:
                 spec2d.plot()
 
-    def get_1d_MTF(self, ky_only=False):
+    def get_1d_MTF(self, ky_only):
         kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
         ky_cut = np.where(np.abs(self.ky)<self.y_cut_off, self.ky, 0)
         kx_mesh = np.outer(kx_cut, np.ones(self.Ny))
-        ky_mesh = np.ones((self.Nt, self.Nx)), ky_cut)
+        ky_mesh = np.ones((self.Nt, self.Nx), ky_cut)
+        k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
         if ky_only:
             MTF_inv = -1.0j*ky_mesh
         else:
-            MTF_inv = -1.0j*np.sqrt(kx_mesh**2 + ky_mesh**2)
-        MTF2d = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+            MTF_inv = -1.0j*np.where(ky_mesh>0, k_mesh, -k_mesh)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            MTF2d = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
         MTF = np.outer(np.ones(self.Nt), MTF2d).reshape((self.Nt, self.Nx, self.Ny))
         return MTF
     
@@ -711,7 +716,8 @@ class _SpectralAnalysis3d(object):
         F_cos_theta *= np.sqrt(self.dkx*self.dky)
         F_sin_theta *= np.sqrt(self.dkx*self.dky)
         MTF_inv = -1.0j*(F_cos_theta[self.Nx//2, self.Ny//2]*kx_mesh + F_sin_theta[self.Nx//2, self.Ny//2]*ky_mesh)
-        MTF2d = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            MTF2d = np.where(np.abs(MTF_inv)>10**(-6), 1./MTF_inv, 1)
         MTF = np.outer(np.ones(self.Nt), MTF2d).reshape((self.Nt, self.Nx, self.Ny))
         return MTF  
 
@@ -721,8 +727,8 @@ class _SpectralAnalysis3d(object):
         self.coeffs = np.where(np.abs(self.coeffs)>threshold, self.coeffs* MTF, 0)
         self.spectrum = np.abs(self.coeffs)**2
 
-    def apply_1d_MTF(self, grid_offset, percentage_of_max=0.01, use_1D_MTF=False):
-        MTF = self.get_1d_MTF(ky_only=False)
+    def apply_1d_MTF(self, percentage_of_max=0.01, ky_only=False):
+        MTF = self.get_1d_MTF(ky_only)
         threshold = percentage_of_max * np.max(np.abs(self.coeffs))
         self.coeffs = np.where(np.abs(self.coeffs)>threshold, self.coeffs* MTF, 0)
         self.spectrum = np.abs(self.coeffs)**2 
@@ -951,15 +957,15 @@ class SpectralAnalysis(object):
         if self.ND==2 or self.ND==3:
             return self.spectrumND.get_2d_MTF(grid_offset) 
 
-    def get_1d_MTF(self, grid_offset):
+    def get_1d_MTF(self, ky_only=False):
         if self.ND==2 or self.ND==3:
-            return self.spectrumND.get_1d_MTF(grid_offset)
+            return self.spectrumND.get_1d_MTF(ky_only)
 
     def apply_MTF(self, grid_offset):
         self.spectrumND.apply_MTF(grid_offset)
 
-    def apply_1d_MTF(self, grid_offset):
-        self.spectrumND.apply_1d_MTF(grid_offset)
+    def apply_1d_MTF(self, ky_only=False):
+        self.spectrumND.apply_1d_MTF(ky_only)
 
     def get_w_slice(self, w_limit=None, k_limit=None, N_average=1):
         if self.ND == 3:
