@@ -158,9 +158,9 @@ class _Surface2D(object):
         
     def eta_at_yi(self, yi, x_sub=None):
         '''
-        return subset of eta for given xi value.
+        return subset of eta for given yi value.
         nearest point in grid is chosen for evaluation
-        returns two arrays, x and eta(xi)
+        returns two arrays, x and eta(yi)
         '''
         if x_sub==None:
             x_sub = [0, self.Nx]
@@ -344,8 +344,8 @@ class _Surface2D(object):
 
 class _Surface3D(object):
     '''
-    surface over 2 dimentions, may be over
-    two spatial dimensions or over spatio-temporal domain
+    Surface over 3 dimensions, 2 spacial dimensions and
+    1 temporal dimension. 
     Not to be used directly but by using class Surface
     '''
     def __init__(self, eta, grid):
