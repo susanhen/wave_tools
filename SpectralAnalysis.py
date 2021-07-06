@@ -1,12 +1,10 @@
 import numpy as np
 from wave_tools import moving_average, surface_core, fft_interface, moving_average, dispersionRelation
-from help_tools import plotting_interface, polar_coordinates
+from help_tools import plotting_interface, polar_coordinates, convolutional_filters
 from radar_tools import dispersion_filter, filter_core
 import functools
 import operator
-#import polarTransform
 import scipy
-import cv2
 
 def _symmetrize2d(surf):
     Nx, Ny = surf.shape
@@ -166,7 +164,7 @@ class _SpectralAnalysis2d(object):
         return self.kx, self.ky, self.coeffs.copy()  
 
     def get_peak_dir(self):
-        k, theta, spec2d_pol = polar_coordinates.cart2finePol(self.kx, self.ky, self.spectrum, Nr=200, Ntheta=400)
+        k, theta, spec2d_pol = polar_coordinates.cart2pol(self.kx, self.ky, self.spectrum, Nr=200, Ntheta=360)
         spec1d = np.mean(spec2d_pol, axis=0)
         return theta[np.argmax(spec1d)]
         
@@ -222,7 +220,7 @@ class _SpectralAnalysis2d(object):
         k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
         spec_filt0 = np.where(np.abs(np.sqrt(k_mesh*9.81*np.tanh(k_mesh*h))-w)<0.2, self.spectrum, 0)
         spec_filt = np.where(spec_filt0>0.3*np.max(spec_filt0), spec_filt0, 0)
-        k, theta, spec_pol = polar_coordinates.cart2finePol(self.kx, self.ky, spec_filt)
+        k, theta, spec_pol = polar_coordinates.cart2pol(self.kx, self.ky, spec_filt)
         kk, th = np.meshgrid(k, theta, indexing='ij')
         k_peak = np.sum(spec_pol * kk, axis=0)/np.sum(spec_pol, axis=0)
         k_peak2 = (np.sum(spec_pol * kk**2, axis=0)/np.sum(spec_pol, axis=0))**(1./2)
@@ -375,41 +373,17 @@ class _SpectralAnalysis2d(object):
         self.coeffs[self.Nx//2, self.Ny//2] = 0
         self.spectrum[self.Nx//2, self.Ny//2] = 0
 
-    def transform_spectrum_to_polar(self, radiusSize):        
-        #FIXME test function properly
-        x_center_ind = self.Nx//2
-        y_center_ind = self.Ny//2
-        initAngle = 0
-        finAngle = 2*np.pi 
-        spectrum_pol, settings = polarTransform.convertToPolarImage(self.spectrum.swapaxes(0,1),  initialRadius=0, center=[x_center_ind,y_center_ind], initialAngle=initAngle,
-                                                            finalAngle=finAngle, radiusSize=radiusSize)
-        spectrum_pol = spectrum_pol.swapaxes(0,1)    
-        spectrum_pol = np.where(spectrum_pol<0, 0, spectrum_pol)
-        Nr, Ntheta = spectrum_pol.shape
+    def transform_spectrum_to_polar(self, Nr, Ntheta):        
+        return polar_coordinates.cart2pol(self.kx, self.ky, self.spectrum, Nr=Nr, Ntheta=Ntheta)
 
-        kx_mesh, ky_mesh = np.meshgrid(self.kx, self.ky, indexing='ij')
-        k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
-        k_max = np.max(k_mesh)
-        dk = k_max/(Nr-1)
-        k = np.arange(0, Nr)*dk
-
-        dtheta = 2*np.pi/(Ntheta-1)
-        theta = np.arange(0, 2*np.pi, dtheta)
-
-        k_pol, sets = polarTransform.convertToPolarImage(k_mesh.swapaxes(0,1), initialRadius=0, center=[x_center_ind, y_center_ind], initialAngle=initAngle, finalAngle = finAngle, radiusSize=radiusSize )
-        k_pol = k_pol.swapaxes(0,1)
-        cut_upper = np.argwhere(k_pol[:,0]>0.3)[0][0]
-        k_out = np.where(np.abs(k_pol[:,0])<0.015, 0, k_pol[:,0])
-        return k_out[:cut_upper], theta, spectrum_pol[:cut_upper,:]
-
-    def integrate_theta(self, radiusSize):
-        k, theta, spectrum_pol = self.transform_spectrum_to_polar(radiusSize)
+    def integrate_theta(self, Nr, Ntheta):
+        k, theta, spectrum_pol = self.transform_spectrum_to_polar(Nr, Ntheta)
         dtheta = theta[1] - theta[0]
         integrated_spec = dtheta * np.sum(spectrum_pol, axis=1)
         return k, integrated_spec
 
-    def get_theta_slice(self, at_theta, radiusSize):
-        k, theta, spectrum_pol = self.transform_spectrum_to_polar(radiusSize)
+    def get_theta_slice(self, at_theta, Nr, Ntheta):
+        k, theta, spectrum_pol = self.transform_spectrum_to_polar(Nr, Ntheta)
         at_theta_ind = np.argmin(np.abs(theta- at_theta))
         return k, spectrum_pol[:,at_theta_ind]
 
@@ -451,7 +425,7 @@ class _SpectralAnalysis3d(object):
 
     def get_peak_dir(self):
         spec2d = np.sum(self.spectrum[:self.Nt//2,:,:], axis=0)
-        k, theta, spec2d_pol = polar_coordinates.cart2finePol(self.kx, self.ky, spec2d, Nr=200, Ntheta=400)
+        k, theta, spec2d_pol = polar_coordinates.cart2pol(self.kx, self.ky, spec2d, Nr=200, Ntheta=400)
         spec1d = np.mean(spec2d_pol, axis=0)
         return theta[np.argmax(spec1d)]
 
@@ -600,51 +574,76 @@ class _SpectralAnalysis3d(object):
         return coeffs_extended, spectrum_extended, grid
         
 
-    def get_k_w_slice_at_peak(self, radiusSize):
+    def get_k_w_slice_at_peak(self, Nr, Ntheta):
         peak_indices = np.unravel_index(np.argmax(self.spectrum), (self.Nt, self.Nx, self.Ny))
         at_theta = np.arctan2(peak_indices[2], peak_indices[1])
         # test ouput... remove large k values
         spec2d = SpectralAnalysis(self.coeffs[0,:,:], self.spectrum[0,:,:], [self.kx, self.ky])
-        k, test = spec2d.spectrumND.get_theta_slice(0, radiusSize)
+        k, test = spec2d.spectrumND.get_theta_slice(0, Nr, Ntheta)
         w_k_spec = np.zeros((self.Nt, len(test)))
         k = None
         peak_value = 0
         for i in range(0, self.Nt):
             spec2d = SpectralAnalysis(self.coeffs[i,:,:], self.spectrum[i,:,:], [self.kx, self.ky])
-            k, w_k_spec[i,:] = spec2d.spectrumND.get_theta_slice(at_theta, radiusSize)
+            k, w_k_spec[i,:] = spec2d.spectrumND.get_theta_slice(at_theta, Nr, Ntheta)
         k_w_spec = w_k_spec.T
-        
-        k_fine = np.linspace(0, k[-1], 300)[1:]
-
-                
-        #k_max_inds = np.argmax(interpol(k_fine), axis=0)
-        #measured_k1 = k_fine[k_max_inds]
-        #max1 = np.max(interpol(k_fine))
-        #choose1 = np.argwhere(np.max(interpol(k_fine), axis=0)>0.01*max1)
-        k_max_inds2 = np.argmax(k_w_spec, axis=0)
-        #measured_k2 = k[k_max_inds2]
-        max2 = np.max(k_w_spec)
-        #choose2 = np.argwhere(np.max(interpol(k_fine), axis=0)>0.01*max2)
-
-        #popt, pcov = scipy.optimize.curve_fit(func, measured_k1[choose1], self.w[choose1])
-
-        import pylab as plt        
-        #plotting_interface.plot_3d_as_2d(k_fine, self.w, interpol(k_fine))
-        #plt.plot(measured_k1[choose1], self.w[choose1])
-        
-        #plt.plot(k_fine, np.sqrt(9.81*k_fine))
-        #plt.plot(k_fine, -np.sqrt(9.81*k_fine))
-        #plt.plot(measured_k1[choose1], func(measured_k1[choose1], *popt))
-        #plotting_interface.show()
 
         plotting_interface.plot_3d_as_2d(k, self.w, k_w_spec)
-        plt.plot(k, np.sqrt(9.81*k))
-        plt.plot(k, -np.sqrt(9.81*k))
+        plotting_interface.plot(k, np.sqrt(9.81*k))
+        plotting_interface.plot(k, -np.sqrt(9.81*k))
         #plt.plot(measured_k1[choose1], self.w[choose1], '--')
         #plt.plot(measured_k2[choose2], self.w[choose2], ':')
         plotting_interface.show()
+
+
+    def transform_spectrum_to_polar(self, Nr, Ntheta):        
+        return polar_coordinates.cart2cylindrical(self.kx, self.ky, self.spectrum, Nr=Nr, Ntheta=Ntheta)
+
+    def estimate_Ueff_psi(self, h, Umax, N_average, ax, kmin=0.04, kmax=0.3, k_limit=None, max_filt_factor=0.1, plot_it=True):
+        if k_limit is None:
+            k_limit = np.min([self.kx[-1], self.ky[-1]])
+        w_upper = self.w[self.Nt//2:]
+        half_spec = np.flip(self.spectrum[1:self.Nt//2+1,:,:], axis=0)
+        k, theta, spec_pol = polar_coordinates.cart2cylindrical(w_upper, self.kx, self.ky, half_spec, Ntheta=100)             
+        spec_pol = np.abs(spec_pol)
         
-    def estimate_Ueff_psi(self, w_list, h, Umax, N_average, ax, N_theta=360, k_limit=None, max_filt_factor=0.1):
+        # dispersion filter
+        mask = dispersion_filter.w_k_theta_filter(w_upper, k, theta, Umax, h, w_min=0.6)
+        masked_spec_pol = mask*spec_pol
+        #masked_spec_pol = spec_pol
+        
+        # select arc with energy          
+        theta_spec = np.sum(np.sum(masked_spec_pol, axis=0), axis=0)        
+        rel_indices = np.argwhere(theta_spec>0.1*np.max(theta_spec)).transpose()[0]        
+        theta_rel = theta[rel_indices]
+        # k_relevant
+        k_min_ind = np.argmin(np.abs(k - kmin))
+        k_max_ind = np.argmin(np.abs(k - kmax))
+        k_rel = k[k_min_ind:k_max_ind+1]
+        # empty disp cone
+        disp_cone = np.zeros((len(k_rel), len(theta_rel)))
+        rel_spec = masked_spec_pol[:,k_min_ind:k_max_ind+1,rel_indices]
+        min_dw = 4* np.sqrt(self.dkx*9.81)
+        dw_max = np.maximum(k_rel*Umax, min_dw)
+        ww, kk = np.meshgrid(w_upper, k_rel, indexing='ij')
+        w0_rel = np.sqrt(kk*9.81*np.tanh(kk*h))
+
+        
+        for i in range(0, len(theta_rel)):
+            input_spec = convolutional_filters.apply_Gaussian_blur(rel_spec[:,:,i])
+            w_peaks = np.sum(input_spec**0.3 * ww, axis=0)/np.sum(input_spec**0.3, axis=0)
+            disp_cone[:,i] = w_peaks
+            
+            if plot_it:
+                scaled_2d = spec_pol[:,k_min_ind:k_max_ind,i]/np.max(spec_pol[:,k_min_ind:k_max_ind,i])
+                #plotting_interface.plot_k_w_spec(k_rel, w_upper, np.log10(scaled_2d).T, extent=[0.03, 0.35, 0.5, 1.9])
+                plotting_interface.plot_k_w_spec(k_rel, w_upper, np.log10(input_spec).T, extent=[0.03, 0.35, 0.5, 1.9])
+                plotting_interface.plot(k_rel, w_peaks)
+                plotting_interface.plot(k_rel, np.sqrt(k_rel*9.81*np.tanh(k_rel*h)))
+                plotting_interface.show()
+        return k_rel, disp_cone
+        
+    def estimate_Ueff_psi_at_w(self, w_list, h, Umax, N_average, ax, N_theta=360, k_limit=None, max_filt_factor=0.1):
         if k_limit is None:
             k_limit = self.kx[-1]
         # provide list of 2d spectra
@@ -665,13 +664,8 @@ class _SpectralAnalysis3d(object):
             at_w = w_upper_extended[chosen_index]
             spec2d = sped2d_list_extended[chosen_index]
             kx_ky_spec = spec2d.spectrum()
-            ker = 3
-            #kernel = np.ones((ker,ker), np.float32)/ker**2
-            kernel = (1. / 16) * np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]])
-            #kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-            #kernel = np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]])
-
-            dst = cv2.filter2D(kx_ky_spec, -1, kernel)
+            
+            dst = convolutional_filters.apply_Gaussian_blur(kx_ky_spec)
 
             kx_mesh, ky_mesh = np.meshgrid(kx, ky, indexing='ij')
             k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
@@ -1010,12 +1004,13 @@ class SpectralAnalysis(object):
         else:
             print('Error: integrate_theta is not implemented for dimensions lower than 2D')
 
-    def get_transform_spectrum_to_polar(self):
-        radiusSize = int(np.sqrt(self.spectrumND.Nx**2 + self.spectrumND.Ny**2))
+    def transform_spectrum_to_polar(self):
+        Nr = int(np.sqrt(self.spectrumND.Nx**2 + self.spectrumND.Ny**2))
+        Ntheta = 360
         if self.ND ==2:
-            return self.spectrumND.get_transform_spectrum_to_polar(radiusSize)
+            return self.spectrumND.transform_spectrum_to_polar(Nr, Ntheta)
         elif self.ND ==3:
-            print('Error: Not implemented')
+            return self.spectrumND.transform_spectrum_to_polar(Nr, Ntheta)
         else:
             print('Error: get_transform_to_polar not implemented for dimensions lower than 2D')
 
@@ -1026,7 +1021,7 @@ class SpectralAnalysis(object):
         else:
             print('Error: Not implemented')
 
-    def estimate_Ueff_psi(self, w_list, h, Umax, N_average=1, ax=None, k_limit=None, max_filt_factor=0.1):
+    def estimate_Ueff_psi_at_w(self, w_list, h, Umax, N_average=1, ax=None, k_limit=None, max_filt_factor=0.1):
         '''
         Estimate the current for the given spectrum.
         The estimation is done separately for all provided w in w_list
@@ -1053,16 +1048,44 @@ class SpectralAnalysis(object):
                                 current direction in rad for each Ueff
         '''
         if self.ND==3:
-            return self.spectrumND.estimate_Ueff_psi(w_list, h, Umax, N_average, ax, k_limit=k_limit, max_filt_factor=max_filt_factor)
+            return self.spectrumND.estimate_Ueff_psi_at_w(w_list, h, Umax, N_average, ax, k_limit=k_limit, max_filt_factor=max_filt_factor)
         else:
             print('Error: Not available, the current estimation requires a 3d surface')
         
-        
+    
+    def estimate_Ueff_psi(self, h, Umax, N_average=1, ax=None, k_limit=None, max_filt_factor=0.1):
+        '''
+        Estimate the current for the given spectrum.
+        The estimation is performed separately for each wave number 
+        Parameters:
+        -----------
+            input
+                    h           float
+                                waterdepth
+                    Umax        float
+                                expected limit for max current
+                    N_average   int
+                                number of neighboring w-slices for the estimation, default=1 (central slice)
+                    ax          matplotlib axes     
+                                for plotting
+                    k_limit     float, optional
+                                for limiting the kx,ky-extent
+                                
+            return
+                    Ueff        array
+                                effective currents for each k
+                    psi         array
+                                current direction in rad for each Ueff
+        '''
+        if self.ND==3:
+            return self.spectrumND.estimate_Ueff_psi(h, Umax, N_average, ax, k_limit=k_limit, max_filt_factor=max_filt_factor)
+        else:
+            print('Error: Not available, the current estimation requires a 3d surface')    
 
-    def get_k_w_slice_at_peak(self):
-        radiusSize = int(np.sqrt(self.spectrumND.Nx**2 + self.spectrumND.Ny**2))
+    def get_k_w_slice_at_peak(self, Ntheta=360):
+        Nr = np.max([self.spectrumND.Nx, self.spectrumND.Ny])        
         if self.ND == 3:
-            return self.spectrumND.get_k_w_slice_at_peak(radiusSize)
+            return self.spectrumND.get_k_w_slice_at_peak(Nr, Ntheta)
         else:
             print('Error: get_k_w_slice is not implemented for dimensions lower than 2D')
 
