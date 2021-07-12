@@ -1,11 +1,12 @@
 import numpy as np
-from wave_tools import moving_average, surface_core, fft_interface, moving_average
+from wave_tools import moving_average, surface_core, fft_interface, moving_average, dispersionRelation
 from help_tools import plotting_interface, polar_coordinates
 from radar_tools import dispersion_filter, filter_core
 import functools
 import operator
 #import polarTransform
 import scipy
+import cv2
 
 def _symmetrize2d(surf):
     Nx, Ny = surf.shape
@@ -100,15 +101,14 @@ class _SpectralAnalysis1d(object):
             print('Error: given moment was not defined')
         return Tc
         
-    def plot(self, extent=None):
+    def plot(self, extent=None, ax = None):
         '''
         Parameters:
         -----------
-        fn          filename for saving plot, also used as title
         extent      tupel of limits (x_lower, x_upper), y_lower, y_upper) #FIXME CHECK if None option is implemented        
         '''
         #FIXME: fix extent
-        plotting_interface.plot_wavenumber_spec(self.kx, self.spectrum, scaled=True)
+        plotting_interface.plot_wavenumber_spec(self.kx, self.spectrum, scaled=True, ax=ax)
 
     def remove_zeroth(self):
         self.coeffs[self.Nx//2] = 0
@@ -170,15 +170,14 @@ class _SpectralAnalysis2d(object):
         spec1d = np.mean(spec2d_pol, axis=0)
         return theta[np.argmax(spec1d)]
         
-    def plot(self, extent):# dB=True, vmin=-60):
+    def plot(self, extent, ax=None):# dB=True, vmin=-60):
         '''
         Parameters:
         -----------
-        fn          filename for saving plot, also used as title
-        waterdepth  used when defining dispersion relation. If unkonw maybe set to high value #FIXME do this internally and option to set NONE or is there?
-        extent      tupel of limits (x_lower, x_upper, y_lower, y_upper) #FIXME CHECK if None option is implemented        
+            input
+                    extent      tupel of limits (x_lower, x_upper, y_lower, y_upper) #FIXME CHECK if None option is implemented        
         '''
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum, extent=extent)  #.plot_k_w_mod2D(self.kx, self.ky, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)        
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum, extent=extent, ax=ax)  #.plot_k_w_mod2D(self.kx, self.ky, self.spectrum, fn, waterdepth, r'$\mathrm{dB}$', extent=extent, U=U, dB=dB, vmin=vmin, fn=fn, save=save)        
 
     def get_sub_spectrum(self, kx_min, kx_max, ky_min, ky_max):
         kx_min_ind = np.argwhere(self.kx > kx_min)[0][0]
@@ -206,11 +205,11 @@ class _SpectralAnalysis2d(object):
         return coeffs_new, spectrum_new, grid      
 
 
-    def plot_orig_disp_rel(self, w, z, Ux, Uy, h, extent=None):
-        plotting_interface.plot_disp_rel_at(w, h, z, Ux, Uy, 'w', extent)  
+    def plot_orig_disp_rel(self, w, z, Ux, Uy, h, ax=None, extent=None):
+        plotting_interface.plot_disp_rel_at(w, h, z, Ux, Uy, 'w', ax, extent)  
 
-    def plot_0current_disp_rel(self, w, h, extent=None):
-        plotting_interface.plot_disp_rel_at(w, h, 0, 0, 0, 'r', extent)
+    def plot_0current_disp_rel(self, w, h, ax=None, extent=None):
+        plotting_interface.plot_disp_rel_at(w, h, 0, 0, 0, 'r', ax, extent)
 
     def plot_disp_rel_kx_ky(self, w, h=1000):
         #check if there is enough wave energy on the y-axis for this procedure:
@@ -456,12 +455,12 @@ class _SpectralAnalysis3d(object):
         spec1d = np.mean(spec2d_pol, axis=0)
         return theta[np.argmax(spec1d)]
 
-    def plot(self, extent, dB=None, vmin=None, save=False):
+    def plot(self, extent, ax=None, dB=None, vmin=None, save=False):
         '''
         plots the integrated kx-ky-spectrum and the integrated k-omega-spectrum
         '''
         #FIXME implement: options of 3d something and slices along different axis, single slices or a bunch, use subspectra in 2D!
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, np.sum(self.spectrum[self.Nt//2:], axis=0)*self.dw, extent=extent)
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, np.sum(self.spectrum[self.Nt//2:], axis=0)*self.dw, extent=extent, ax=ax)
 
     def remove_zeroth(self):
         self.coeffs[self.Nt//2, self.Nx//2, self.Ny//2] = 0
@@ -547,6 +546,8 @@ class _SpectralAnalysis3d(object):
         '''
         Returns new spec3d object based on new w, kx, ky and spectrum within the given limits
         '''
+        if w_limit is None:
+            w_limit = self.w[-1]
         w_max_ind = np.argwhere(self.w >= w_limit)[0][0] + 1
         w_min_ind = self.Nt - w_max_ind
         kx_max_ind = np.argwhere(self.kx >= k_limit)[0][0] + 1
@@ -643,11 +644,17 @@ class _SpectralAnalysis3d(object):
         #plt.plot(measured_k2[choose2], self.w[choose2], ':')
         plotting_interface.show()
         
-    def estimate_Ueff_psi(w_list, h, Umax=1.0, N_average=3, plot_it=True, N_theta=360):
-        #TODO: should it be checked if anti_alising has been run?
-        grid, sped2d_list_extended = self.get_w_slice(None, k_limit, N_average)
+    def estimate_Ueff_psi(self, w_list, h, Umax, N_average, ax, N_theta=360, k_limit=None, max_filt_factor=0.1):
+        if k_limit is None:
+            k_limit = self.kx[-1]
+        # provide list of 2d spectra
+        grid, sped2d_list_extended = self.get_w_slice(False, None, None, k_limit, N_average)
         w_upper_extended, kx, ky = grid
 
+        # collectors for estimates
+        U_effs = np.zeros(len(w_list))
+        psis = np.zeros(len(w_list))
+        i=0
        
         # choose slice for given at_w
         for at_w in w_list:
@@ -659,20 +666,28 @@ class _SpectralAnalysis3d(object):
             spec2d = sped2d_list_extended[chosen_index]
             kx_ky_spec = spec2d.spectrum()
             ker = 3
-            kernel = np.ones((ker,ker), np.float32)/ker**2
+            #kernel = np.ones((ker,ker), np.float32)/ker**2
+            kernel = (1. / 16) * np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]])
+            #kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+            #kernel = np.array([[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]])
+
             dst = cv2.filter2D(kx_ky_spec, -1, kernel)
 
             kx_mesh, ky_mesh = np.meshgrid(kx, ky, indexing='ij')
             k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
             dw_max = k_mesh*Umax
             spec_filt0 = np.where(np.abs(np.sqrt(k_mesh*9.81*np.tanh(k_mesh*h))-at_w)<dw_max, dst, 0)  
-            spec_filt = np.where(spec_filt0>0.1*np.max(spec_filt0), spec_filt0, 0)
+            spec_filt = np.where(spec_filt0>max_filt_factor*np.max(spec_filt0), spec_filt0, 0)
 
-            U_eff_est, psi_est = helper_tools.estimate_U_eff_psi_directly(at_w, self.kx, self.ky, spec_filt, h, N_theta)
+            U_effs[i], psis[i] = dispersionRelation.estimate_U_eff_psi_directly(at_w, self.kx, self.ky, spec_filt, h, N_theta)
 
+            if ax is not None:
+                spec2d.plot(ax=ax)
+                plotting_interface.plot_disp_rel_for_Ueff_at(at_w, h, U_effs[i], psis[i], 'w', ax=ax, extent=[-k_limit, k_limit, -k_limit, k_limit])
 
-            if plot_it:
-                spec2d.plot()
+            i = i + 1
+        return U_effs, psis
+                
 
     def get_1d_MTF(self, ky_only):
         kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
@@ -911,17 +926,17 @@ class SpectralAnalysis(object):
             print('wrong axis input for given specturm!')
             return 0  
             
-    def plot(self, extent=None):#, fn, waterdepth=None, extent=None, U=None, dB=True, vmin=-60, save=False):
+    def plot(self, extent=None, ax=None):#, fn, waterdepth=None, extent=None, U=None, dB=True, vmin=-60, save=False):
         '''
         TODO: recheck all arguments sensible to include
         '''
         #FIXME description!
         if self.ND==1:
-            self.spectrumND.plot(extent)
+            self.spectrumND.plot(extent, ax)
         elif self.ND==2:
-            self.spectrumND.plot(extent)
+            self.spectrumND.plot(extent, ax)
         elif self.ND==3:
-            self.spectrumND.plot(extent)
+            self.spectrumND.plot(extent, ax)
 
     def plot_orig_disp_rel(self, w, z, Ux, Uy, h, extent=None):
         self.spectrumND.plot_orig_disp_rel(w, z, Ux, Uy, h, extent)
@@ -1011,7 +1026,7 @@ class SpectralAnalysis(object):
         else:
             print('Error: Not implemented')
 
-    def estimate_Ueff_psi(self, w_list):
+    def estimate_Ueff_psi(self, w_list, h, Umax, N_average=1, ax=None, k_limit=None, max_filt_factor=0.1):
         '''
         Estimate the current for the given spectrum.
         The estimation is done separately for all provided w in w_list
@@ -1020,6 +1035,17 @@ class SpectralAnalysis(object):
             input
                     w_list      array
                                 all w for choosing corresponding w-slice
+                    h           float
+                                waterdepth
+                    Umax        float
+                                expected limit for max current
+                    N_average   int
+                                number of neighboring w-slices for the estimation, default=1 (central slice)
+                    ax          matplotlib axes     
+                                for plotting
+                    k_limit     float, optional
+                                for limiting the kx,ky-extent
+                                
             return
                     Ueff        array
                                 effective currents for each w
@@ -1027,7 +1053,7 @@ class SpectralAnalysis(object):
                                 current direction in rad for each Ueff
         '''
         if self.ND==3:
-            return self.spectrumND.estimate_Ueff_psi(w_list)
+            return self.spectrumND.estimate_Ueff_psi(w_list, h, Umax, N_average, ax, k_limit=k_limit, max_filt_factor=max_filt_factor)
         else:
             print('Error: Not available, the current estimation requires a 3d surface')
         

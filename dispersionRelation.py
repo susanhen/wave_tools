@@ -1,5 +1,8 @@
 import numpy as np
 from skimage import measure
+import scipy.interpolate
+from scipy.optimize import minimize
+from help_tools import plotting_interface
 
 
 def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)):   
@@ -54,6 +57,75 @@ def calc_wavenumber(w, h, Ueff, psi, Ntheta, Niter_max=200, eps=10**(-6)):
         kk[chosen_indices,:] = ki
         th = np.outer(np.ones(len(w)), theta)
     return kk, th
+
+
+    
+def get_U_eff_at(k, z, U):   
+    '''
+    Calculate the effective current according to Stewart and Joy
+
+    Parameters:
+    -----------
+    input
+            k       float
+                    wavenumber related to Bragg waves
+            z       array
+                    depth coordinates with velocity profile
+            U       array
+                    strength of the current for z
+    '''
+    #return 2*k*simpson(U*np.exp(2*k*z), z)
+    return 2*k*np.sum(U*np.exp(2*k*z))*np.abs(z[1]-z[0])    
+
+    
+def get_dispersion_cone_at(at_w, h, z, U, psi, extent=None, polar=False):
+    CS = plotting_interface.plot_disp_rel_at(at_w, h, z, U, psi, 'w', extent=extent)    
+    kx_theor, ky_theor = CS.collections[0].get_paths()[0].vertices.T
+    k_theor = np.sqrt(kx_theor**2 + ky_theor**2)
+    th_theor = np.arctan2(ky_theor, kx_theor)
+    # convert to only positive angles
+    th_theor = np.where(th_theor<0, th_theor+(2*np.pi), th_theor)
+    # sort so that angles go from lowest to highest
+    inds = np.argsort(th_theor)
+    th_theor = th_theor[inds]
+    k_theor = k_theor[inds]
+    if polar:
+        return k_theor, th_theor
+    else:
+        return k_theor*np.cos(th_theor), k_theor*np.sin(th_theor)
+
+def estimate_U_eff_psi_directly(at_w, kx, ky, spec, h, Ntheta, Umax=1, thresh_fact=0.1):
+    kx_mesh, ky_mesh = np.meshgrid(kx, ky, indexing='ij')
+    k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
+    k_estim = at_w**2/9.81
+    z = np.linspace(-10,0, 10)
+    Umax_eff = get_U_eff_at(k_estim, z, Umax)
+    dw_max = k_mesh*Umax_eff
+    spec_filt0 = np.where(np.abs(np.sqrt(k_mesh*9.81*np.tanh(k_mesh*h))-at_w)<dw_max, spec, 0)  
+    spec_filt = np.where(spec_filt0>thresh_fact*np.max(spec_filt0), spec_filt0, 0)
+    kx_mesh, ky_mesh = np.meshgrid(kx, ky, indexing='ij')
+    k_mesh = np.sqrt(kx_mesh**2 + ky_mesh**2)
+    th_mesh = np.arctan2(ky_mesh, kx_mesh)
+    th_mesh = np.where(th_mesh<0, th_mesh+2*np.pi, th_mesh)
+    max_spec = np.max(np.abs(spec_filt))
+
+    def minimize_distances(U_vec):
+        Ux, Uy = U_vec
+        Ueff = np.sqrt(Ux**2 + Uy**2)
+        psi = np.arctan2(Uy, Ux) 
+        k_now, theta = calc_wavenumber(at_w, h, Ueff, psi, Ntheta)
+        f_k_now = scipy.interpolate.interp1d(theta, k_now)
+        return np.sum(spec_filt * np.abs(k_mesh-f_k_now(th_mesh))**2)
+
+    opt = minimize(minimize_distances, [0.9, 0.9])
+    Ux, Uy = opt.x
+    U = np.sqrt(Ux**2 + Uy**2)
+    psi = np.arctan2(Uy, Ux)
+    return U, psi
+
+
+
+
 
 if __name__=='__main__':
     import pylab as plt
