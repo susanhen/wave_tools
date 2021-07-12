@@ -49,7 +49,7 @@ def jonswap_k(k, wp, Hs, h, gamma=3.3, k_cut=None):
     if k_cut==None:
         k_cut = k[-1]
     g = 9.81
-    w = np.sqrt(g*abs(k) * tanh(abs(k)*h))
+    w = np.sqrt(g*abs(k) * np.tanh(abs(k)*h))
     jonny_w = jonswap(w, wp, Hs, gamma)
     
     A = g*np.tanh(k*h)
@@ -100,7 +100,7 @@ if __name__=='__main__':
         print('Hs ( S(k)) = ', np.sqrt(sum(ji*np.gradient(k)))*4)
         plt.plot(k, ji)     
         ji = jonswap(w,wp, Hs, gamma)
-        plt.plot(w**2/9.81, 0.5*ji*sqrt(k/9.81))
+        plt.plot(w**2/9.81, 0.5*ji*np.sqrt(k/9.81))
         
     # generate example with surface elevation
     from numpy import pi, cos, outer, sum, var

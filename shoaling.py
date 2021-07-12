@@ -2,7 +2,7 @@
 import numpy as np
 from numpy.lib import scimath as SM
 from scipy.optimize import fsolve
-import pylab as plt
+import matplotlib.pyplot as plt
 from scipy.special import gamma
 from scipy.interpolate import interp1d
 from scipy.integrate import dblquad, quad, simps
@@ -81,7 +81,7 @@ class Bathymetry:
     def plot2d(self):
         X, Y= np.meshgrid(self.x, self.y, indexing='ij')
         fig = plt.figure(figsize=(14,8))
-        ax = fig.gca(projection='3d')
+        ax = fig.add_subplot(111, projection='3d')
         surf = ax.plot_surface(X, Y, self.H, linewidth=0, antialiased=False)
         fig.colorbar(surf, shrink=0.5, aspect=5)
                 
@@ -181,7 +181,7 @@ class DirectionalSpectrum:
         return f
     
     
-    def seed_f_theta(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=False):
+    def seed_f_theta(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=True):
         f = self.seed_f(f_min, f_max, N_f)
         print('f seeded')
         Theta = np.zeros((N_f, N_theta))
@@ -201,7 +201,7 @@ class DirectionalSpectrum:
             
         if plot_it:                            
             fig = plt.figure(figsize=(14,8))
-            ax = fig.gca(projection='3d')
+            ax = fig.add_subplot(111, projection='3d')
             xxx = np.arange(0, N_f)
             yyy = np.arange(0, N_theta)
             bla, blu = np.meshgrid(xxx, yyy, indexing='ij')
@@ -209,7 +209,7 @@ class DirectionalSpectrum:
         return ff, Theta
     
     
-    def define_realization(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=False):
+    def define_realization(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=True):
         f_r, Theta_r = self.seed_f_theta(f_min, f_max, theta_min, theta_max, N_f, N_theta)
         #print('theta seeded')
         #Q = quad(self.S, f_min, f_max)[0]
@@ -236,7 +236,7 @@ class DirectionalSpectrum:
         #aa = a.flatten()
         if plot_it:
             fig = plt.figure(figsize=(14,8))
-            ax = fig.gca(projection='3d')
+            ax = fig.add_subplot(111, projection='3d')
             xxx = np.arange(0, N_f)
             yyy = np.arange(0, N_theta)
             bla, blu = np.meshgrid(xxx, yyy, indexing='ij')
@@ -321,7 +321,7 @@ class SpectralRealization:
             plotting_interface.plot_3d_as_2d(x, y, zeta)
             plt.colorbar()
             plt.xlabel('$x~[\mathrm{m}]$')
-            plt.xlabel('$y~[\mathrm{m}]$')
+            plt.ylabel('$y~[\mathrm{m}]$')
             plt.figure()
             plt.plot(x, zeta[:,150])
             plt.xlabel('$x~[\mathrm{m}]$')
@@ -365,8 +365,7 @@ if __name__=='__main__':
     print('Bathymetry defined')
     #b.plot1d()
     #b.plot2d()
-    #plt.show()
-    zeta = realization.invert(b, 0, x, y)    
+    zeta = realization.invert(b, 0, x, y, plot_it=True)    
     
     plt.show()
     
