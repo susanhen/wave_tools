@@ -6,6 +6,10 @@ from help_tools import plotting_interface, polar_coordinates
 import h5py
 from fractions import Fraction
 import scipy
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+contour_colormap = cm.coolwarm
+color_list = ['r', 'b', 'k'] #TODO make a proper one!
 
 class _Surface1D(object):
     '''
@@ -921,6 +925,272 @@ def plot_surfaces2d(list_of_surfaces, xi, yi, y_sub=None, x_sub=None):
         ax1.legend()
         ax2.legend()
     plt.show()
+
+class spacetempSurface(object):
+    '''
+    surface over 1 spatial dimension and 1 temporal dimension.
+    Will most likely be used directly
+    '''
+
+    def __init__(self, name, eta, grid, window_applied=False):
+        self.name = name
+        self.window_applied = window_applied
+        self.grid = grid
+        self.ND = 2
+        self.eta = eta
+        self.x = grid[0]
+        self.t = grid[1]
+        self.Nx = len(self.x)
+        self.Nt = len(self.t)
+        self.dx = self.x[1]-self.x[0]
+        self.dt = self.t[1]-self.t[0]
+
+    def save(self, fn, name, window_applied):
+        '''
+        saves a Surface to hdf5 file format
+        '''
+        hf = h5py.File(fn, 'w')
+        hf.create_dataset('eta', data=self.eta)
+        hf.create_dataset('x', data=self.x)
+        hf.create_dataset('t', data=self.t)
+        hf.attrs['window_applied'] = window_applied 
+        hf.attrs['name'] = name
+        hf.attrs['ND'] = 2
+        hf.close()
+
+    def get_surf(self, x_sub, t_sub):
+        '''
+        return surface information (x,t,z)
+        if x_sub or t_sub are given return subspace
+        Parameters:
+            
+            x_sub       array/tule containing two values
+                        this values define values within x-grid used to define subspace
+            t_sub       array/tule containing two values
+                        this values define values within t-grid used to define subspace       
+        '''
+        if x_sub==None:
+            x_ind0 = 0
+            x_indN = self.Nx
+        else:
+            x_ind0 = np.argmin(abs(self.x/x_sub[0]))
+            x_indN = np.argmin(abs(self.x/x_sub[1]))
+            if np.logical_or(x_ind0>=self.Nx, x_ind0<0):
+                print('Error: First values of x_sub is outide x.')
+                return None
+            if np.logical_or(x_indN>=self.Nx, x_indN<0):
+                print('Error: Last values of x_sub is outide x.')
+                return None
+        if t_sub==None:
+            t_ind0 = 0
+            t_indN = self.Nt
+        else:
+            t_ind0 = np.argmin(abs(self.t/t_sub[0]))
+            t_indN = np.argmin(abs(self.t/t_sub[1]))
+            if np.logical_or(t_ind0>=self.Nt, t_ind0<0):
+                print('Error: First values of t_sub is outide t.')
+                return None
+            if np.logical_or(t_indN>=self.Nt, t_indN<0):
+                print('Error: Last values of t_sub is outide t.')
+                return None
+        return self.x[x_ind0:x_indN], self.t[t_ind0:t_indN], (self.eta.copy())[x_ind0:x_indN, t_ind0:t_indN]
+
+    def eta_at_xi(self, xi, t_sub=None):
+        '''
+        return subset of eta for given xi value.
+        nearest point in grid is chosen for evaluation
+        returns two arrays, y and eta(xi)
+        '''
+        if t_sub==None:
+            t_sub = [0, self.Ny]
+        t_sub_ind = np.where(np.logical_and(self.t>t_sub[0], abs(self.t)<t_sub[1]))#[0]
+        if len(t_sub_ind)<=0:
+            print('t_sub does not define subspace on the t-axis')
+            return None
+        else:
+            t_sub_ind = t_sub_ind[0]
+        x_ind = np.argmin(abs(self.x/xi-1))
+        if np.logical_or(x_ind<self.Nx, x_ind>=0):
+            return self.t[t_sub_ind], self.eta[x_ind,t_sub_ind]
+        else:
+            print('Error: Chosen value of xi was outside of x')
+            return None
+
+    def eta_at_ti(self, ti, x_sub=None):
+        '''
+        return subset of eta for given ti value.
+        nearest point in grid is chosen for evaluation
+        returns two arrays, x and eta(ti)
+        '''
+        if x_sub==None:
+            x_sub = [0, self.Nx]
+        x_sub_ind = np.where(np.logical_and(self.x>x_sub[0], abs(self.x)<x_sub[1]))#[0]
+        if len(x_sub_ind)<=0:
+            print('x_sub does not define subspace on the x-axis')
+            return None
+        else:
+            x_sub_ind = x_sub_ind[0]     
+        t_ind = np.argmin(abs(self.x/ti-1))
+        if np.logical_or(t_ind<self.Nt, t_ind>=0):
+            return self.x[x_sub_ind], self.eta[x_sub_ind,t_ind]
+        else:
+            print('Error: Chosen value of ti was outside of t')
+            return None   
+
+    def get_r_grid(self):
+        return np.abs(self.x) 
+
+    def get_deta_dx(self):
+        deta_dx, deta_dt = np.gradient(self.eta, self.x, self.t)
+        return deta_dx
+
+    def get_deta_dt(self):
+        deta_dx, deta_dt = np.gradient(self.eta, self.x, self.t)
+        return deta_dt
+    
+    def copy(self, name):
+        return spacetempSurface(name, self.eta, self.grid, self.window_applied)
+
+    def get_name(self):
+        return self.name
+
+    def replace_grid(self, new_grid):
+        self.grid = new_grid
+        self.x = new_grid[0]
+        self.t = new_grid[1]
+
+    def copy2newgrid(self, name, new_grid):
+        return spacetempSurface(name, self.eta.copy(), new_grid)
+
+    def get_local_incidence_surface(self, H, approx=False):
+        deta_dx = self.get_deta_dx()
+        r = np.abs(self.x)        
+        if approx:
+            n_norm = 1
+            b_norm = r
+            cos_theta_l = (self.x*deta_dx  )/(n_norm*b_norm)
+        else:
+            n_norm = np.sqrt(deta_dx**2 + 1)
+            b_norm = np.sqrt(r**2 + (H-self.eta)**2)
+            cos_theta_l = (self.x*deta_dx + (H-self.eta))/(n_norm*b_norm)
+        theta_l = np.arccos(cos_theta_l)
+        return theta_l
+
+    def plot_3d_surface(x, t, z, radial_filter=False):
+        if radial_filter:
+            filt = radial_filter(x, t)
+        else:
+            filt=1
+        fig = plt.figure()
+        axes = fig.add_subplot(111, projection='3d')
+        x_mesh, t_mesh = np.meshgrid(x, t, indexing='ij')
+        axes.plot_surface(x_mesh, t_mesh, (filt*z), cmap=cm.coolwarm)
+        axes.set_xlabel('x')
+        axes.set_ylabel('t')
+        axes.set_zlabel('$\eta$')
+
+    def fft_interpolate(self, inter_factor_x, inter_factor_t):
+        x_inter, t_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x, self.t, self.eta, inter_factor_x*self.Nx, inter_factor_t*self.Nt)
+        return  [x_inter, t_inter], eta_inter
+
+    def get_sub_surface(self, extent, dx_new, dt_new):
+        if dx_new is None:
+            dx_new = self.dx
+        if dt_new is None:
+            dt_new = self.dt
+        frac_x = Fraction(dx_new/self.dx).limit_denominator(4)
+        inter_factor_x = frac_x.denominator
+        frac_t = Fraction(dt_new/self.dt).limit_denominator(4)
+        inter_factor_t = frac_t.denominator
+        if inter_factor_x>1 or inter_factor_t>1:
+            grid_new, eta_new = self.fft_interpolate(inter_factor_x, inter_factor_t)
+            x_new, t_new = grid_new
+        else:
+            x_new = self.x
+            t_new = self.t
+            eta_new = self.eta     
+        x_out = np.arange(extent[0], extent[1]+dx_new/2, dx_new)
+        t_out = np.arange(extent[2], extent[3]+dt_new/2, dt_new)
+        interpol_eta = scipy.interpolate.RectBivariateSpline(x_new, t_new, eta_new)
+        eta_out = interpol_eta(x_out, t_out)           
+        return [x_out, t_out], eta_out 
+
+    def get_illumination_function(self, H):
+        # Assuming that spatial dimension is along the radar beam
+        r = np.outer(np.abs(self.x), np.ones(self.Nt))
+        radar_point_angle = np.arctan2(r, (H - self.eta))        
+        illumination = np.ones(r.shape)
+        for i in range(0,self.Nx-1): 
+            illumination[i+1:,:] *= radar_point_angle[i,:] < radar_point_angle[i+1:,:] 
+        return illumination 
+
+    def get_surf_at_index(self, time_index):
+        '''
+        Returns a 1d surface for the given time index.
+        '''
+        return spacetempSurface(self.name+'_at_{0:.2f}'.format(self.t[time_index]), self.eta[:,time_index], [self.x])
+
+    def apply_window(self, window):
+        if self.window_applied==True:
+            print('\nWarning: a window has already been applied, the window is not applied!')
+        else:
+            self.eta *= window
+            self.window_applied = True
+
+    def remove_window(self, window):
+        if self.window_applied==False:
+            print('Warning: no window has been applied, no window can be removed!')
+        else:
+            self.eta /= window
+            self.window_applied = False
+
+    def find_crests(self, axis, method='zero_crossing'): 
+        '''
+        Returns the indices where the data has peaks according to the given methods:
+        The maximum is calculated in one dimension indicated by the axis
+        So far limited to 2d, first dimension is the interesting one!
+        Parameters:
+        -----------
+        input:
+        ------- 
+        axis        int: number of axis where max should be calculated
+        method      method for finding peaks: "zero_crossing": the peak 
+                    between two zero crossings; zeros crossings does not 
+                    find single peaks with negative values to each side
+                    method "all_peaks" finds all individiual peaks
+        return:     1d array for 1d data input, two arrays for 2d data input
+        --------
+        peak_indices            
+        ''' 
+        return find_peaks.find_peaks(self.eta, axis, method)
+
+    def find_freak_waves(self, axis):
+        '''
+        
+        '''
+        return find_freak_waves.find_freak_waves(self.eta, axis)
+
+    def replace_eta(self, new_eta):
+        self.eta =new_eta
+
+    def define_spectralAnalysis(self, grid_cut_off=None):
+        grid = [self.x, self.t]
+        kx, w, coeffs = fft_interface.physical2spectral(self.eta.copy(), grid)
+        k_grid = [kx, w]
+        return SpectralAnalysis.SpectralAnalysis(coeffs, abs(coeffs)**2, k_grid, self.window_applied, grid_cut_off)
+
+    def surface_from_file(fn):
+        '''
+        Read surface from file and create instance surface from file.
+        '''
+        hf = h5py.file(fn, 'r')
+        name = hf.attrs['name']
+        window_applied = hf.attrs['window_applied']
+        eta = np.array(hf.get('eta'))
+        x = np.array(hf.get('x'))
+        t = np.array(hf.get('t'))
+        grid = [x,t]
+        return spacetempSurface(name, eta, grid, window_applied)
         
         
            
