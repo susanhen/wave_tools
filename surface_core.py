@@ -1,7 +1,6 @@
 import numpy as np
 from wave_tools import find_peaks, find_freak_waves, fft_interface, SpectralAnalysis, fft_interpolate
 import matplotlib.pyplot as plt
-import polarTransform
 from help_tools import plotting_interface, polar_coordinates
 import h5py
 from fractions import Fraction
@@ -240,97 +239,43 @@ class _Surface2D(object):
         theta_l = np.arccos(cos_theta_l)
         return theta_l
         
-    def get_geometric_shadowing(self, H):
-        # TODO: differentiate between kx-ky and k,w
-        # create polar image
-        # improve check for x grid and y grid!
-        # Extension needed so that antenna position is in the image
-        '''
-        if self.x[0]<=0:
-            x_all = self.x
-        else:
-            x_all = np.arange(0, self.x[-1]+self.dx, self.dx)
-        if self.y[0]<=0:
-            y_all = self.y
-        else:
-            y_all = np.arange(0, self.y[-1]+self.dy, self.dy)
-
-        x_mesh, y_mesh = np.meshgrid(x_all, y_all, indexing='ij')
-        r_mesh = np.sqrt(x_mesh**2 + y_mesh**2)
-        theta_mesh = np.arctan2(y_mesh, x_mesh)
-        
-        Nx_all, Ny_all = x_mesh.shape
-        eta_all = np.zeros(x_mesh.shape)
-        eta_all[Nx_all-self.Nx:,Ny_all-self.Ny:] = self.eta
-        x_center_ind = np.argmin(np.abs(x_all))
-        y_center_ind = np.argmin(np.abs(y_all))
-        
-        radiusSize = self.Nx + self.Ny
-        initAngle = np.min(theta_mesh)
-        finAngle = np.max(theta_mesh)       
-
-        eta_pol, settings = polarTransform.convertToPolarImage(eta_all.swapaxes(0,1),  initialRadius=0, center=[x_center_ind,y_center_ind], initialAngle=initAngle,
-                                                            finalAngle=finAngle, radiusSize=radiusSize)
-        eta_pol = eta_pol.swapaxes(0,1)   
-        
-        
-    
-        Nr, Ntheta = eta_pol.shape
-        theta0 = settings.initialAngle
-        thetaN = settings.finalAngle
-        r0 = settings.initialRadius
-        rN = settings.finalRadius
-        r = np.linspace(r0, rN, Nr, endpoint=True)
-        theta = np.linspace(theta0, thetaN, Ntheta, endpoint=True)
-        #plotting_interface.plot_3d_as_2d(r, theta*180/np.pi, eta_pol)
-        '''
-
-
+    def get_geometric_shadowing(self, H, plot_it=False):
         # second approach
-        r, theta, eta_pol = polar_coordinates.cart2finePol(self.x, self.y, self.eta)
+        r, theta, eta_pol = polar_coordinates.cart2pol(self.x, self.y, self.eta)
      
         # calculate shadowing for each angle
-        r_pol, theta_pol = np.meshgrid(r, theta, indexing='ij')#NOTE: ??? changed? opposite indexing to match with polarTransform
-        radar_point_angle = r_pol/(H - eta_pol)#np.arctan2(r_pol, (H - eta_pol))
+        r_pol, theta_pol = np.meshgrid(r, theta, indexing='ij')
+        radar_point_angle = r_pol/(H - eta_pol)# arctan has same monotony as argument np.arctan2(r_pol, (H - eta_pol))
 
-        illumination = np.ones(eta_pol.shape, dtype=int)
+        illu_pol = np.ones(eta_pol.shape, dtype=int)
         for i in range(1,10):
-            illumination[i:, :] *= ((radar_point_angle[:-i, :] - radar_point_angle[i:, :])*180/np.pi < 0).astype('int')
-        '''
-        plt.figure()
-        plt.plot(illumination[:,200], '-r')
-        plt.plot(eta_pol[:,200], '-k')
-        plt.figure()
-        plt.plot(illumination[:,220])
-        plt.plot(eta_pol[:,220])
-        plt.figure()
-        plt.plot(illumination[:,230])
-        plt.plot(eta_pol[:,230])
-        plt.figure()
-        plt.plot(illumination[:,240])
-        plt.plot(eta_pol[:,240])
-        plt.show()
-        '''
-        '''
-        #revert mapping 1
-        #eta_cart, settings = polarTransform.convertToCartesianImage(eta_pol.swapaxes(0,1), center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
-        illu_cart, settings = polarTransform.convertToCartesianImage(illumination.swapaxes(0,1), center=[Nr//2,0], initialAngle=theta[0], finalAngle=theta[-1], imageSize=(Nx_all, Ny_all))
-        illu_cart = illu_cart.swapaxes(0,1)
-        illu_cart = illu_cart[-self.Nx:,-self.Ny:]
-        plotting_interface.plot_3d_as_2d(x_all, y_all, illu_cart)
-        '''
-        # revert mapping2
-        illu_cart = polar_coordinates.averagePol2cart(r, theta, illumination, self.x, self.y)
-        illu_cart = illu_cart.round().astype(int)
+            illu_pol[i:, :] *= ((radar_point_angle[:-i, :] - radar_point_angle[i:, :])*180/np.pi < 0).astype('int')
 
-        #plotting_interface.plot_3d_as_2d(self.x, self.y, illu_cart)
-        #plotting_interface.show()
-        
+        if plot_it:
+            plt.figure()
+            plt.plot(illu_pol[:,200], '-r')
+            plt.plot(eta_pol[:,200], '-k')
+            plt.figure()
+            plt.plot(illu_pol[:,220])
+            plt.plot(eta_pol[:,220])
+            plt.figure()
+            plt.plot(illu_pol[:,230])
+            plt.plot(eta_pol[:,230])
+            plt.figure()
+            plt.plot(illu_pol[:,240])
+            plt.plot(eta_pol[:,240])
+            plt.show()
+        x, y, illu_cart = polar_coordinates.pol2cart(r, theta, illu_pol, x_out=self.x, y_out=self.y)
+        plotting_interface.plot_3d_as_2d(x, y, illu_cart)
+        illu_cart = illu_cart.round().astype(int) # TODO make this part of the polar_coordinates?      
+               
         return illu_cart
 
     def get_illumination_function(self, H):
         return self.get_geometric_shadowing(H)
-            
+
+    # 2D time-space!
+    '''        
     def get_illumination_function_w_k(self, H, axis=0):
         if axis==0:
             r = np.outer(self.x, np.ones(self.Ny))  
@@ -344,7 +289,7 @@ class _Surface2D(object):
         if axis==1:
             illumination = illumination.transpose()
         return illumination       
-
+    '''
 
 class _Surface3D(object):
     '''
