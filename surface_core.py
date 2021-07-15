@@ -938,7 +938,7 @@ class spacetempSurface(object):
             if np.logical_or(t_indN>=self.Nt, t_indN<0):
                 print('Error: Last values of t_sub is outide t.')
                 return None
-        return self.x[x_ind0:x_indN], self.t[t_ind0:t_indN], (self.eta.copy())[x_ind0:x_indN, t_ind0:t_indN]
+        return self.x[x_ind0:x_indN], self.t[t_ind0:t_indN], (self.eta.copy())[t_ind0:t_indN, x_ind0:x_indN]
 
     def eta_at_xi(self, xi, t_sub=None):
         '''
@@ -956,7 +956,7 @@ class spacetempSurface(object):
             t_sub_ind = t_sub_ind[0]
         x_ind = np.argmin(abs(self.x/xi-1))
         if np.logical_or(x_ind<self.Nx, x_ind>=0):
-            return self.t[t_sub_ind], self.eta[x_ind,t_sub_ind]
+            return self.t[t_sub_ind], self.eta[t_sub_ind,x_ind]
         else:
             print('Error: Chosen value of xi was outside of x')
             return None
@@ -977,7 +977,7 @@ class spacetempSurface(object):
             x_sub_ind = x_sub_ind[0]     
         t_ind = np.argmin(abs(self.x/ti-1))
         if np.logical_or(t_ind<self.Nt, t_ind>=0):
-            return self.x[x_sub_ind], self.eta[x_sub_ind,t_ind]
+            return self.x[x_sub_ind], self.eta[t_ind,x_sub_ind]
         else:
             print('Error: Chosen value of ti was outside of t')
             return None   
@@ -986,11 +986,11 @@ class spacetempSurface(object):
         return np.abs(self.x) 
 
     def get_deta_dx(self):
-        deta_dx, deta_dt = np.gradient(self.eta, self.x, self.t)
+        deta_dt, deta_dx = np.gradient(self.eta, self.t, self.x)
         return deta_dx
 
     def get_deta_dt(self):
-        deta_dx, deta_dt = np.gradient(self.eta, self.x, self.t)
+        deta_dt, deta_dx = np.gradient(self.eta, self.t, self.x)
         return deta_dt
     
     def copy(self, name):
@@ -1028,10 +1028,10 @@ class spacetempSurface(object):
             filt=1
         fig = plt.figure()
         axes = fig.add_subplot(111, projection='3d')
-        x_mesh, t_mesh = np.meshgrid(x, t, indexing='ij')
-        axes.plot_surface(x_mesh, t_mesh, (filt*z), cmap=cm.coolwarm)
-        axes.set_xlabel('x')
-        axes.set_ylabel('t')
+        t_mesh, x_mesh = np.meshgrid(t, x, indexing='ij')
+        axes.plot_surface(t_mesh, x_mesh, (filt*z), cmap=cm.coolwarm)
+        axes.set_xlabel('t')
+        axes.set_ylabel('x')
         axes.set_zlabel('$\eta$')
 
     def fft_interpolate(self, inter_factor_x, inter_factor_t):
@@ -1128,7 +1128,7 @@ class spacetempSurface(object):
         '''
         Read surface from file and create instance surface from file.
         '''
-        hf = h5py.file(fn, 'r')
+        hf = h5py.File(fn, 'r')
         name = hf.attrs['name']
         window_applied = hf.attrs['window_applied']
         eta = np.array(hf.get('eta'))
@@ -1136,6 +1136,15 @@ class spacetempSurface(object):
         t = np.array(hf.get('t'))
         grid = [x,t]
         return spacetempSurface(name, eta, grid, window_applied)
+
+    def save_velocity(fn, vel):
+        hf = h5py.File(fn, 'w')
+        hf.create_dataset('vel', data = vel)
+        hf.close()
+
+    def load_velocity(self, fn):
+        hf = h5py.File(fn, 'r')
+        self.vel = np.array(hf.get('vel'))
         
         
            
