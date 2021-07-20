@@ -2,7 +2,7 @@
 
 import unittest
 import numpy as np
-from wave_tools import surface_core
+from wave_tools import surface_core, breaking_1d
 from help_tools import convolution, plotting_interface
 import matplotlib.pyplot as plt
 
@@ -300,6 +300,8 @@ class SeaSurface(unittest.TestCase):
         retrieved_surf.plot_3d_surface()
         plt.show()
 
+    def test_breaking_1d(self):
+        print('Not written yet!')
 
 
 

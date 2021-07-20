@@ -1,5 +1,5 @@
 import numpy as np
-from wave_tools import find_peaks, find_freak_waves, fft_interface, SpectralAnalysis, fft_interpolate
+from wave_tools import find_peaks, find_freak_waves, fft_interface, SpectralAnalysis, fft_interpolate, peak_tracking
 import matplotlib.pyplot as plt
 from help_tools import plotting_interface, polar_coordinates
 import h5py
@@ -1145,10 +1145,28 @@ class spacetempSurface(object):
     def load_velocity(self, fn):
         hf = h5py.File(fn, 'r')
         self.vel = np.array(hf.get('vel'))
-        
-        
-           
-            
-    
-        
-        
+
+    def breaking_tracking(self, L, T):
+        pt = peak_tracking.get_PeakTracker(self.x, self.t,
+                                           self.eta, self.vel)
+        pt.breaking_tracker()
+        msurf = np.zeros((np.size(self.t), np.size(self.x)))
+        xind = int(np.round(L/self.dx))
+        tind = int(np.round(T/self.dt))
+        for i in range(0, pt.Nb):
+            tloc = pt.bindex[i,0]
+            xloc = pt.bindex[i,1]
+            dis = 0
+            speed = pt.pc[i+1]
+            for j in range(0, tind):
+                if tloc + j >= np.size(self.t):
+                    break
+                for k in range(0, xind):
+                    if xloc - k < 0:
+                        break
+                    msurf[tloc+j, xloc-k] = 1                   
+                dis += self.dt*(-speed)
+                while dis >= self.dx:
+                    xloc -= 1
+                    dis -= self.dx
+        return msurf, pt

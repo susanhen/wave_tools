@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import pylab as plt
+import matplotlib.pyplot as plt
+from wave_tools.surface_core import spacetempSurface
 #from radar_tools import deconvolution_core
 from wave_tools import fft_interface
 from wave_tools import fft_interpolate
@@ -13,6 +14,7 @@ from scipy.optimize import fsolve
 from help_tools import plotting_interface
 from scipy.special import gamma as gamma_func
 from wave_tools import surface_core
+from wave_tools import shoaling_1d
 
 
 
@@ -468,10 +470,34 @@ def shoaling_case(surf_name='shoaling_surface', save=False):
     if save:
         surf.save('../../Data/SimulatedWaves/shoaling_windsea_res{0:1.1f}_dt{1:1.1f}_T{2:d}_U0_surf3d.hdf5'.format(dx, dt, T))
     return surf
+
+def shoaling_1D(dx, t, Tp, N_f, surfname = 'surfprofile',
+                velname = 'velprofile',  f_min = 0.001,
+                f_max = 0.4, F=300000):
+    x = np.arange(200, 2200+dx, dx)
+    g = 9.81
+    fp = 1./Tp
+    gam = 3.3
+    DirSpec = shoaling_1d.DirectionalSpectrum(Tp, gam, F)
+    realization = shoaling_1d.SpectralRealization(DirSpec, f_min, f_max, N_f, dx)
+    b = shoaling_1d.Bathymetry(x)
+    Nt = len(t)
+    Nx = len(x)
+    eta = np.zeros((Nt, Nx))
+    vel = np.zeros((Nt, Nx))
+    eta = realization.invert(b, t, x, plot_it=False)
+    vel = realization.vel(eta, b,  t, x)
+    bsurf = surface_core.spacetempSurface('eta', eta, [x, t])
+    bsurf.save(surfname, 'eta', False)
+    surface_core.spacetempSurface.save_velocity(velname,vel)
+    spacetempSurface.plot_3d_surface(x, t, eta)
+    
+
     
 
 if __name__=='__main__':
-    t = np.linspace(0,100, 200)
+    t = np.linspace(0,120, 1200)
+    dx = 0.5
     Tp = 10
     Hs = 2.0
     Alpha = 0.023
@@ -479,6 +505,7 @@ if __name__=='__main__':
     theta_mean = np.pi/2+30*np.pi/180
     N = 256
     gamma = 3.3
+    N_f = 100
     '''
     eta = JonswapWave1D(t, Tp, Hs)
     print('Hs in 1d: ', np.sqrt(np.var(eta)))
@@ -562,7 +589,12 @@ if __name__=='__main__':
     '''
 
     # shoaling JONSWAP
+    '''
     shoaling_case(save=True)
+    '''
+
+    # shoaling JONSWAP 1D
+    shoaling_1D(dx, t, Tp, N_f)
 
     plt.show()
 
