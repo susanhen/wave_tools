@@ -9,8 +9,6 @@ from scipy.integrate import dblquad, quad, simps
 from scipy import integrate
 from matplotlib import cm
 from help_tools import plotting_interface
-from PJ_playground import peak_tracking
-from wave_tools import surface_core
 import h5py
 
 class Bathymetry:

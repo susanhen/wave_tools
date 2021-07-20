@@ -10,7 +10,7 @@ from scipy import integrate
 from matplotlib import cm
 from help_tools import plotting_interface
 from wave_tools import surface_core
-from PJ_playground import shoaling1d_jonswap, peak_tracking
+from wave_tools import peak_tracking
 import numpy.ma as ma
 
 bsurf = surface_core.spacetempSurface.surface_from_file('surfprofile')
