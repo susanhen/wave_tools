@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
+import sys, os
 import unittest
 import numpy as np
-from wave_tools import surface_core, breaking_1d
+from wave_tools import shoaling_1d, surface_core
 from help_tools import convolution, plotting_interface
 import matplotlib.pyplot as plt
 
@@ -290,18 +291,61 @@ class SeaSurface(unittest.TestCase):
     def test_inversion_with_1d_MTF(self):
         y_grid_offset = 500
         self.surf2d.replace_grid([self.x, self.y+y_grid_offset])
-        self.surf2d.plot_3d_surface()
+        #self.surf2d.plot_3d_surface()
         HP_limit = 0.04
         surf_theta_l_45 = self.surf2d.get_local_incidence_surface('theta_l_45', 45, approx=False)
         spec_theta_l_45 = surf_theta_l_45.define_SpectralAnalysis()
         spec_theta_l_45.apply_HP_filter(HP_limit)
         spec_theta_l_45.apply_1d_MTF()
         retrieved_surf = spec_theta_l_45.invert('retrieved_surf', grid_offset=[self.surf2d.x[0], self.surf2d.y[0]])
-        retrieved_surf.plot_3d_surface()
+        #retrieved_surf.plot_3d_surface()
         plt.show()
 
-    def test_breaking_1d(self):
-        print('Not written yet!')
+    def test_shoaling_1d(self):
+        ti = np.array([0])
+        dx = 0.5
+        a = np.array([1])
+        f_r = np.array([0.1])
+        x = np.arange(200, 2200+dx, dx)
+        Nx = len(x)
+        bathy1 = -10 * (x<=700)
+        bathy2 = (-0.05*x + 25)*(np.logical_and(x>700, x<=1700))
+        bathy3 = -60*(x>1700)
+        b = bathy1 + bathy2 + bathy3
+
+        def calc_wavenumbert(f_r):
+            k_out = np.zeros(Nx)
+            eps = 10**(-6)
+            N_max = 100
+            w = 2*np.pi*f_r
+            ki = w**2/(9.81)
+            wt = np.sqrt(9.81*ki*np.tanh(ki*(-b)))
+            count = 0
+            while np.max(np.abs(w-wt))>eps and count<N_max:
+                latter = 9.81*np.tanh(ki*(-b))
+                ki = w**2/(latter)
+                wt = np.sqrt(latter)
+                count += 1
+            k_out[:] = ki
+            return k_out
+
+        k = calc_wavenumbert(f_r)
+        w = 2*np.pi*f_r
+        H = -b
+        
+        zetat = np.zeros(Nx)
+        k2H_by_sinh_2kH = np.where(k*H < 50,  2*k*H / np.sinh(2*k*H), 0)
+        ksh = np.cumsum(k*dx)
+        Cgx = w/(2*k*(1+k2H_by_sinh_2kH))
+        Cg0x = w[-1]/(2*k*(1+k2H_by_sinh_2kH[-1]))
+        phase = np.array([np.random.uniform()*np.pi*2])
+        zetat += a*np.abs(np.sqrt(Cg0x/Cgx))*np.cos(phase+w*ti+ksh)
+
+        bc = shoaling_1d.Bathymetry(x, bathy_filename=0, test=True)
+        test = shoaling_1d.SpectralRealization(0, 0, 0, 1, dx, test=True, phase=phase)
+        zetac = test.invert(bc, ti, x)[0]
+        for i in range(0, len(zetac)):
+            self.assertAlmostEqual(zetat[i], zetac[i])
 
 
 

@@ -13,30 +13,38 @@ import h5py
 
 class Bathymetry:
 
-    def __init__(self, x, bathy_filename='RR23605_bathy.hdmf'):
-        # read profile from file
-        hf = h5py.File(bathy_filename, 'r')
-        h = np.array(hf['bathy'])
-        r = np.array(hf['r'])
-        hf.close()
-        # interpolate profile to given grid where available
-        if x[0] >= r[0]:
-            x_max_ind = np.argwhere(x>r[-1])[0][0]
-            x_int = x[:x_max_ind]
-            bathy_func = interp1d(r, h, kind='cubic')
-            bathy1 = bathy_func(x_int)        
-        else:
-            print('Error not yet implemented!')
-
+    def __init__(self, x, bathy_filename='RR23605_bathy.hdmf', test=False):
         dx = x[1] - x[0]
         x_u = x
         self.x = x_u
         self.Nx = len(self.x)
-        bathy2 = -0.005*((np.arange(0, len(x)-x_max_ind))*dx) + bathy1[-1] 
-        bathy = np.block([bathy1, bathy2])
-        h_func = interp1d(x_u, bathy, kind='cubic')
-        self.h = h_func(x)
-        self.H = -self.h        
+        if test==False:
+            # read profile from file
+            hf = h5py.File(bathy_filename, 'r')
+            h = np.array(hf['bathy'])
+            r = np.array(hf['r'])
+            hf.close()
+            # interpolate profile to given grid where available
+            if x[0] >= r[0]:
+                x_max_ind = np.argwhere(x>r[-1])[0][0]
+                x_int = x[:x_max_ind]
+                bathy_func = interp1d(r, h, kind='cubic')
+                bathy1 = bathy_func(x_int)        
+            else:
+                print('Error not yet implemented!')
+
+            bathy2 = -0.005*((np.arange(0, len(x)-x_max_ind))*dx) + bathy1[-1] 
+            bathy = np.block([bathy1, bathy2])
+            h_func = interp1d(x_u, bathy, kind='cubic')
+            self.h = h_func(x)
+            self.H = -self.h
+        else:
+            bathy1 = -10 * (x<=700)
+            bathy2 = (-0.05*x + 25)*(np.logical_and(x>700, x<=1700))
+            bathy3 = -60*(x>1700)
+            b = bathy1 + bathy2 + bathy3
+            self.h = b
+            self.H = -b       
 
     def plot(self):
         plt.figure()
@@ -110,14 +118,20 @@ class DirectionalSpectrum:
 
 class SpectralRealization:
 
-    def __init__(self, DirSpec, f_min, f_max, N_f, dx):
-        self.DirSpec = DirSpec
-        self.f_min = f_min
-        self.f_max = f_max
+    def __init__(self, DirSpec, f_min, f_max, N_f, dx, test=False, phase=None):
         self.N_f = N_f
         self.dx = dx
-        self.f_r, self.a = DirSpec.define_realization(f_min, f_max, N_f)
-        self.phase = np.random.uniform(0,2*np.pi,size=self.N_f)
+        if test == False:
+            self.DirSpec = DirSpec
+            self.f_min = f_min
+            self.f_max = f_max
+            self.f_r, self.a = DirSpec.define_realization(f_min, f_max, N_f)
+            self.phase = np.random.uniform(0,2*np.pi,size=self.N_f)
+        else:
+            self.a = np.array([1])
+            self.f_r = np.array([0.1])
+            self.phase = phase
+
 
     def calc_wavenumber(self, Nx, bathy=None, h=1000):
 
@@ -136,7 +150,6 @@ class SpectralRealization:
         w = 2*np.pi*self.f_r
         H = bathy.H
         
-        #zeta = np.zeros(Nx)
         zeta = np.zeros((np.size(ti),Nx))
         print ('before loop')
 
