@@ -64,7 +64,7 @@ class Peak:
                 if self.Bx[i]>=self.threshold and self.c[i] != 0:
                     self.breaking = True
                     self.position = np.array([self.t_start + self.dt*i, self.x[i]])
-                    self.cb = self.c[i]
+                    self.cb = np.average(self.c)
                     break
         else:
             self.Bx = 0

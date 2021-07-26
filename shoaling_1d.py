@@ -149,6 +149,7 @@ class SpectralRealization:
         print('wavenumber calculated')
         w = 2*np.pi*self.f_r
         H = bathy.H
+        Nt = np.size(ti)
         
         zeta = np.zeros((np.size(ti),Nx))
         print ('before loop')
@@ -158,8 +159,17 @@ class SpectralRealization:
             ksh = np.cumsum(k[i,:]*self.dx)
             Cgx = w[i]/(2*k[i]*(1+k2H_by_sinh_2kH))
             Cg0x = w[-1]/(2*k[-1]*(1+k2H_by_sinh_2kH[-1]))
+
             for j in range(0, np.size(ti)):
                 zeta[j,:] = zeta[j,:] + self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(self.phase[i]+w[i]*ti[j]+ksh)
+
+            print(np.shape(w[i]))
+            print(np.shape(self.phase[i]))
+            print(np.shape(Cgx))
+
+            '''
+            zeta += np.outer(self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx)),np.cos(self.phase[i]*np.ones(Nt)+w[i]*ti+np.outer(ksh*,np.ones(Nt))))
+            '''
             '''    
             if plot_it:
                 plt.figure()
