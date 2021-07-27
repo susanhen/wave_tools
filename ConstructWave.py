@@ -15,6 +15,7 @@ from help_tools import plotting_interface
 from scipy.special import gamma as gamma_func
 from wave_tools import surface_core
 from wave_tools import shoaling_1d
+import h5py
 
 
 
@@ -182,12 +183,12 @@ def JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
         eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
     return surface_core.Surface('jonswap', eta, [t, x, y]) 
 
-def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, U, psi):
+def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, U, psi, save_alongside=False, fn='dummy.hdmf'):
     g = 9.81
     Nt = len(t)
     Nx = len(x)
     Ny = len(y)
-    dk = 0.005
+    dk = 0.0005
     k = np.arange(0.01, 0.35, dk)
     dtheta=0.05
     theta=np.arange(0, 2*np.pi, dtheta)
@@ -210,9 +211,22 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     a1 = (ascale1*a_mean).flatten()
     a2 = (ascale2*a_mean).flatten()
     eta = np.zeros((Nt, Nx, Ny))
+    if save_alongside:
+        hf = h5py.File(fn, 'w')
+        hf.create_dataset('t', data=t)
+        hf.create_dataset('x', data=x)
+        hf.create_dataset('y', data=y)
+        hf.attrs['window_applied'] = False 
+        hf.attrs['name'] = 'shearCurrent'
+        hf.attrs['ND'] = 3
+        eta_dset = hf.create_dataset('eta', eta.shape)
     for i in range(0, Nt):
         phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten()) - np.outer(t[i]*ww, np.ones(Nx*Ny))
         eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
+        if save_alongside:
+            eta_dset[i,:,:] = eta[i,:,:]
+    if save_alongside:
+        hf.close()
     return surface_core.Surface('jonswap', eta, [t, x, y]) 
 
 def JonswapWave3D_asymetric(t, x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h=1000):

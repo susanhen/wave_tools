@@ -1,5 +1,5 @@
 import numpy as np
-from wave_tools import moving_average, surface_core, fft_interface, moving_average, dispersionRelation
+from wave_tools import moving_average, surface_core, fft_interface, dispersionRelation
 from help_tools import plotting_interface, polar_coordinates, convolutional_filters
 from radar_tools import dispersion_filter, filter_core
 import functools
@@ -599,9 +599,33 @@ class _SpectralAnalysis3d(object):
     def transform_spectrum_to_polar(self, Nr, Ntheta):        
         return polar_coordinates.cart2cylindrical(self.kx, self.ky, self.spectrum, Nr=Nr, Ntheta=Ntheta)
 
-    def estimate_Ueff_psi(self, h, Umax, N_average, ax, kmin=0.04, kmax=0.3, k_limit=None, max_filt_factor=0.1, plot_it=True):
-        if k_limit is None:
-            k_limit = np.min([self.kx[-1], self.ky[-1]])
+
+    def estimate_dispersion_cone(self, h, Umax, kmin=0.04, kmax=0.3, plot_it=False):
+        '''
+        Estimate dispersion cone
+
+        Parameters:
+        -----------
+                    input       
+                            h       float
+                                    waterdepth
+                            Umax    float
+                                    maximum expected current 
+                            kmin    float
+                                    lower boundary for wave numbers relevant for defining cone, default 0.04
+                            kmax    float
+                                    upper boundary for wave numbers relevant for defining cone, default 0.3
+                            plot_it bool
+                                    if data and cone slice should be shown
+
+                    output:
+                            k_rel   array
+                                    vector of wave numbers for which the dispersion cone is defined
+                            theta_rel  array
+                                    vector of azimuth angles for which the dispersino cone is defined
+                            disp_cone   2d array
+                                        angular frequency for each combinatin of wave numbers and angle 
+        '''
         w_upper = self.w[self.Nt//2:]
         half_spec = np.flip(self.spectrum[1:self.Nt//2+1,:,:], axis=0)
         k, theta, spec_pol = polar_coordinates.cart2cylindrical(w_upper, self.kx, self.ky, half_spec, Ntheta=100)             
@@ -621,7 +645,7 @@ class _SpectralAnalysis3d(object):
         k_max_ind = np.argmin(np.abs(k - kmax))
         k_rel = k[k_min_ind:k_max_ind+1]
         # empty disp cone
-        disp_cone = np.zeros((len(k_rel), len(theta_rel)))
+        w_matrix = np.zeros((len(k_rel), len(theta_rel)))
         rel_spec = masked_spec_pol[:,k_min_ind:k_max_ind+1,rel_indices]
         min_dw = 4* np.sqrt(self.dkx*9.81)
         dw_max = np.maximum(k_rel*Umax, min_dw)
@@ -632,7 +656,7 @@ class _SpectralAnalysis3d(object):
         for i in range(0, len(theta_rel)):
             input_spec = convolutional_filters.apply_Gaussian_blur(rel_spec[:,:,i])
             w_peaks = np.sum(input_spec**0.3 * ww, axis=0)/np.sum(input_spec**0.3, axis=0)
-            disp_cone[:,i] = w_peaks
+            w_matrix[:,i] = w_peaks
             
             if plot_it:
                 scaled_2d = spec_pol[:,k_min_ind:k_max_ind,i]/np.max(spec_pol[:,k_min_ind:k_max_ind,i])
@@ -641,9 +665,82 @@ class _SpectralAnalysis3d(object):
                 plotting_interface.plot(k_rel, w_peaks)
                 plotting_interface.plot(k_rel, np.sqrt(k_rel*9.81*np.tanh(k_rel*h)))
                 plotting_interface.show()
-        return k_rel, disp_cone
-        
-    def estimate_Ueff_psi_at_w(self, w_list, h, Umax, N_average, ax, N_theta=360, k_limit=None, max_filt_factor=0.1):
+        return k_rel, theta_rel, w_matrix
+
+    def estimate_dispersion_slices(self, h, Umax, kmin=0.04, kmax=0.3, wmin=0.8, wmax=1.8, plot_it=False):
+        '''
+        Esimate dispersion cone and return it as polar slices in w
+
+        Parameters:
+        -----------
+                    input       
+                            h       float
+                                    waterdepth
+                            Umax    float
+                                    maximum expected current 
+                            kmin    float
+                                    lower boundary for wave numbers relevant for defining cone, default 0.04
+                            kmax    float
+                                    upper boundary for wave numbers relevant for defining cone, default 0.3
+                            wmin    float
+                                    lower boundary for angular frequency relevant for defining cone, default 0.8
+                            wmax    float
+                                    upper boundary for angular frequency relevant for defining cone, default 1.8
+                            plot_it bool
+                                    if data and cone slice should be shown
+
+                    output:
+                            w_rel   array
+                                    vector of wave numbers for which the dispersion cone is defined
+                            theta_rel  array
+                                    vector of azimuth angles for which the dispersino cone is defined                            
+                            k_matrix   2d array
+                                        w(k, theta)
+                    
+        '''
+        k_rel, theta_rel, w_matrix = self.estimate_dispersion_cone(h, Umax, kmin=kmin, kmax=kmax, plot_it=plot_it)
+        # define max w and min w to know contour lines
+        if wmin<np.min(w_matrix):
+            wmin = np.min(w_matrix)
+        if wmax>np.max(w_matrix):
+            wmax = np.max(w_matrix)        
+        min_ind = np.argwhere(wmin < self.w)[0][0]
+        max_ind = np.argwhere(wmax > self.w)[-1][0]
+        w_rel = self.w[min_ind:max_ind]
+        k_matrix = np.zeros((len(w_rel), len(theta_rel)))
+        for i in range(0, len(theta_rel)):
+            # invert disp rel 
+            F = scipy.interpolate.interp1d(w_matrix[:,i], k_rel, kind='cubic', bounds_error=False)
+            k_matrix[:,i] = F(w_rel)
+        return w_rel, theta_rel, k_matrix
+
+    def estimate_Ueff_psi(self, h, Umax, kmin=0.04, kmax=0.3, wmin=0.8, wmax=1.8, ax=None, U0_vec=[0,0], k_limit=None):
+        if k_limit is None:
+            k_limit = self.kx[-1]
+
+        w_rel, theta_rel, k_matrix = self.estimate_dispersion_slices(h, Umax, kmin, kmax, wmin, wmax)
+
+        # collectors for estimates
+        U_effs = np.zeros(len(w_rel))
+        psis = np.zeros(len(w_rel))
+        i=0
+
+        for at_w in w_rel:
+            if at_w>np.max(self.w[-1]):
+                print('\n\nchosen w is too large, will be set to max(w)!!!\n\n')
+                at_w = np.max(self.w)
+            U_effs[i], psis[i] = dispersionRelation.estimate_U_eff_psi_at_w(at_w, k_matrix[i,:], theta_rel, h, U0_vec=U0_vec)
+
+            if ax is not None:
+                w_ind = np.argmin(np.abs(at_w-self.w))
+                plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum[w_ind,:,:], ax=ax, extent=[-k_limit, k_limit, -k_limit, k_limit])
+                plotting_interface.plot_disp_rel_for_Ueff_at(at_w, h, U_effs[i], psis[i], 'w', ax=ax, extent=[-k_limit, k_limit, -k_limit, k_limit])
+
+            i = i + 1
+        return w_rel, U_effs, psis
+       
+
+    def estimate_Ueff_psi_at_w_old(self, w_list, h, Umax, N_average, ax, N_theta=360, k_limit=None, max_filt_factor=0.1):
         if k_limit is None:
             k_limit = self.kx[-1]
         # provide list of 2d spectra
@@ -1021,7 +1118,7 @@ class SpectralAnalysis(object):
         else:
             print('Error: Not implemented')
 
-    def estimate_Ueff_psi_at_w(self, w_list, h, Umax, N_average=1, ax=None, k_limit=None, max_filt_factor=0.1):
+    def estimate_Ueff_psi_at_w_old(self, w_list, h, Umax, N_average=1, ax=None, k_limit=None, max_filt_factor=0.1):
         '''
         Estimate the current for the given spectrum.
         The estimation is done separately for all provided w in w_list
@@ -1048,15 +1145,15 @@ class SpectralAnalysis(object):
                                 current direction in rad for each Ueff
         '''
         if self.ND==3:
-            return self.spectrumND.estimate_Ueff_psi_at_w(w_list, h, Umax, N_average, ax, k_limit=k_limit, max_filt_factor=max_filt_factor)
+            return self.spectrumND.estimate_Ueff_psi_at_w_old(w_list, h, Umax, N_average, ax, k_limit=k_limit, max_filt_factor=max_filt_factor)
         else:
             print('Error: Not available, the current estimation requires a 3d surface')
         
     
-    def estimate_Ueff_psi(self, h, Umax, N_average=1, ax=None, k_limit=None, max_filt_factor=0.1):
+    def estimate_Ueff_psi(self, h, Umax, ax=None, k_limit=None):
         '''
         Estimate the current for the given spectrum.
-        The estimation is performed separately for each wave number 
+        The estimation is performed separately for each angular frequency
         Parameters:
         -----------
             input
@@ -1072,13 +1169,15 @@ class SpectralAnalysis(object):
                                 for limiting the kx,ky-extent
                                 
             return
+                    w_rel       array
+                                levels of angular frequency for which Ueff and psi have been estimated
                     Ueff        array
-                                effective currents for each k
+                                effective currents for each w
                     psi         array
                                 current direction in rad for each Ueff
         '''
         if self.ND==3:
-            return self.spectrumND.estimate_Ueff_psi(h, Umax, N_average, ax, k_limit=k_limit, max_filt_factor=max_filt_factor)
+            return self.spectrumND.estimate_Ueff_psi(h, Umax, ax=ax, k_limit=k_limit)
         else:
             print('Error: Not available, the current estimation requires a 3d surface')    
 

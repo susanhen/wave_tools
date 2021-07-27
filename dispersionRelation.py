@@ -2,10 +2,25 @@ import numpy as np
 from skimage import measure
 import scipy.interpolate
 from scipy.optimize import minimize
+from scipy.interpolate import interp1d
 from help_tools import plotting_interface
 
 
-def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)):   
+def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)): 
+    '''
+    calculaate the wave number for the provided angular frequency or frequencies when there is no current.
+
+    Parameters
+    ----------
+            input
+                    w       float or array
+                            angular frequency or vector of angular frequencies
+                    h       foat
+                            water depth
+            output
+                    k       float or array
+                            wave number or vector of wave numbers
+    '''  
     g=9.81     
     # treat case that w contains zeros
     w_old = w.copy()
@@ -27,6 +42,27 @@ def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)):
 
 
 def calc_wavenumber(w, h, Ueff, psi, Ntheta, Niter_max=200, eps=10**(-6)): 
+    '''
+    calculaate the wave number for the provided angular frequency or frequencies for the given effective current
+    and the angle of the current psi.
+
+    Parameters
+    ----------
+            input
+                    w       float or array
+                            angular frequency or vector of angular frequencies
+                    h       foat
+                            water depth
+                    Ueff    float or array
+                            effective current (if w is array should be array, one value for each w)
+                    psi     float
+                            angle of the current (if w is array psi shoul be array, one value for each w)
+                    Ntheta  resolution of azimuth angle 
+            output
+                    k       float or array
+                            wave number or vector of wave numbers
+    ''' 
+    # TODO: how to deal with different directions at different slices? array input not correctly supported!!!
     g=9.81     
     theta = np.linspace(0, 2*np.pi, Ntheta)
     chosen_indices = None
@@ -122,6 +158,19 @@ def estimate_U_eff_psi_directly(at_w, kx, ky, spec, h, Ntheta, Umax=1, thresh_fa
     U = np.sqrt(Ux**2 + Uy**2)
     psi = np.arctan2(Uy, Ux)
     return U, psi
+
+
+def estimate_U_eff_psi_at_w(w, k_cur, th_cur, h=1000, U0_vec=[0, 0]):
+    w0_cur = np.sqrt(9.81*k_cur*np.tanh(k_cur*h))
+    def disp_rel(U_vec):
+        Ux, Uy = U_vec
+        return np.sum(np.abs(w-w0_cur - k_cur*(np.cos(th_cur)*Ux + np.sin(th_cur)*Uy))**2)
+
+    opt = minimize(disp_rel, U0_vec)
+    Ux, Uy = opt.x
+    U_eff = np.sqrt(Ux**2 + Uy**2)
+    psi = np.arctan2(Uy, Ux)
+    return U_eff, psi
 
 
 
