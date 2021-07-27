@@ -302,7 +302,7 @@ class SeaSurface(unittest.TestCase):
         plt.show()
 
     def test_shoaling_1d(self):
-        ti = np.array([0])
+        ti = np.array([1])
         dx = 0.5
         a = np.array([1])
         f_r = np.array([0.1])
@@ -343,9 +343,9 @@ class SeaSurface(unittest.TestCase):
 
         bc = shoaling_1d.Bathymetry(x, bathy_filename=0, test=True)
         test = shoaling_1d.SpectralRealization(0, 0, 0, 1, dx, test=True, phase=phase)
-        zetac = test.invert(bc, ti, x)[0]
+        zetac = test.invert(bc, np.array([0, 1, 2]), x)
         for i in range(0, len(zetac)):
-            self.assertAlmostEqual(zetat[i], zetac[i])
+            self.assertAlmostEqual(zetat[i], zetac[1,i])
 
 
 
