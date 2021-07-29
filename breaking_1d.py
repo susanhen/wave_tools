@@ -40,7 +40,7 @@ def breaking_tracking(surf, L, T):
                 xloc -= 1
                 dis -= surf.dx
     return msurf, pt
-
+'''
 msurf, pt = breaking_tracking(bsurf, 10, 10)
 
 tp, xp = 0, 0
@@ -53,3 +53,4 @@ plotting_interface.plot_3d_as_2d(bsurf.t, bsurf.x, bsurf.eta)
 plt.scatter(tp[1:], xp[1:], s=10)
 
 plt.show()
+'''
