@@ -756,9 +756,10 @@ class Surface(object):
         
 
 
-def surface_from_file(fn):
+def surface_from_file(fn, spaceTime=False):
     '''
     Read surface from file and create instance surface from file
+    spaceTime True switches a 2 D case with the first dimension being space and the second being time (FIXME)
     '''  
     hf = h5py.File(fn, 'r')
     name = hf.attrs['name']
@@ -768,14 +769,20 @@ def surface_from_file(fn):
     x = np.array(hf.get('x'))
     if ND == 1:
         grid = [x]
-    elif ND==2:
+        return Surface(name, eta, grid, window_applied)
+    elif ND==2 and spaceTime==False:
         y = np.array(hf.get('y') )
         grid = [x, y]
+        return Surface(name, eta, grid, window_applied)
+    elif ND==2 and spaceTime==True:
+        t = np.array(hf.get('t'))
+        grid = np.array([x, t])
+        return spacetempSurface(name, eta, grid, window_applied)
     elif ND==3:
         t = np.array(hf.get('t'))
         y = np.array(hf.get('y') )
         grid = [t, x, y]
-    return Surface(name, eta, grid, window_applied)
+        return Surface(name, eta, grid, window_applied)
 
 def illumination_from_file(fn, H):
     '''
@@ -1034,6 +1041,13 @@ class spacetempSurface(object):
         axes.set_ylabel('x')
         axes.set_zlabel('$\eta$')
 
+
+    def plot_3d_as_2d(self, extent=None, ax=None, aspect='auto'):
+        ax = plotting_interface.plot_3d_as_2d(self.t, self.x, self.eta, None, extent, ax, aspect)
+        ax.set_xlabel(r'$t~\mathrm{[s]}$')
+        ax.set_ylabel(r'$x~\mathrm{[m]}$')
+        return ax
+
     def fft_interpolate(self, inter_factor_x, inter_factor_t):
         x_inter, t_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x, self.t, self.eta, inter_factor_x*self.Nx, inter_factor_t*self.Nt)
         return  [x_inter, t_inter], eta_inter
@@ -1127,6 +1141,7 @@ class spacetempSurface(object):
     def surface_from_file(fn):
         '''
         Read surface from file and create instance surface from file.
+        TODO move to some other place
         '''
         hf = h5py.File(fn, 'r')
         name = hf.attrs['name']
@@ -1137,8 +1152,8 @@ class spacetempSurface(object):
         grid = [x,t]
         return spacetempSurface(name, eta, grid, window_applied)
 
-    def save_velocity(fn, vel):
-        hf = h5py.File(fn, 'w')
+    def save_velocity(self, fn, vel):
+        hf = h5py.File(fn, 'a')
         hf.create_dataset('vel', data = vel)
         hf.close()
 
