@@ -17,7 +17,7 @@ import math
 bsurf = surface_core.spacetempSurface.surface_from_file('surfprofile')
 bsurf.load_velocity('velprofile')
 
-def breaking_tracking(surf, L, T):
+def breaking_tracking_old(surf, L, T):
     pt = peak_tracking.get_PeakTracker(surf.x, surf.t, surf.eta, surf.vel)
     pt.breaking_tracker()
     msurf = np.zeros((np.size(surf.t), np.size(surf.x)))
@@ -40,6 +40,37 @@ def breaking_tracking(surf, L, T):
                 xloc -= 1
                 dis -= surf.dx
     return msurf, pt
+
+
+def breaking_tracking(surf, peakTracker, L, T):
+    mask = np.zeros(surf.eta.shape)
+    peak_dict = peakTracker.get_peak_dict()    
+    ids_breaking_peaks = peakTracker.get_ids_breaking_peaks()
+    dt = peakTracker.dt
+    dx = peakTracker.dx
+    Nt = peakTracker.Nt
+    x_min = peakTracker.x[0]
+    N_Tb = int(T/dt) # number of points in breaking region in time
+    for id in ids_breaking_peaks:
+        peak = peak_dict[id]
+        t0_ind = peak.get_breaking_start_ind_t()
+        x0 = peak.get_breaking_start_x()
+        cb = peak.cb
+        #N_L = int(L/(np.abs(c)*dt))  # number of points in breaking region in space
+        N_L = int(L/dx)
+        xb = x0 + np.arange(0, N_L) * cb*dt
+        boundary_mask = np.where(xb>=0, 0, 1)
+        xb = ma.masked_array(xb, mask=boundary_mask).compressed()
+        xb_ind = ((xb-x_min)/dx).astype('int')
+        for i in range(0, N_L):
+            t_end_ind = np.min([t0_ind+i+N_Tb, Nt])
+            mask[t0_ind+i:t_end_ind, xb_ind[i]] = 1.0
+    return mask
+
+
+
+
+
 '''
 msurf, pt = breaking_tracking(bsurf, 10, 10)
 
