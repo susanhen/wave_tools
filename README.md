@@ -28,7 +28,7 @@ surf2d = ConstructWave.JonswapWave2D(x, y, Hs, Alpha, gamma, theta_mean, smax)
 surf2d.plot_3d_as_2d()
 plt.show()
 ```
-<img src="example.jpg" width="600">
+<img src="surf2d.jpg" width="600">
 
 # Filter high frequencies
 
