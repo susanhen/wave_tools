@@ -51,7 +51,7 @@ def JonswapWave1D(t ,Tp, Hs, gamma=3.3, h=1000):
     eta *= Hs/(4*np.sqrt(np.var(eta)))
     return eta
 
-def JonswapWave2D(x, Tp, Hs, smax, gamma=3.3, h=1000, theta_mean=0.5*np.pi, N_theta=360):
+def JonswapWave2D_old(x, Tp, Hs, smax, gamma=3.3, h=1000, theta_mean=0.5*np.pi, N_theta=360):
     '''
     Construct 2D JonswapWave S(w,theta) with directional spreading
     
@@ -106,7 +106,7 @@ def JonswapWave2D(x, Tp, Hs, smax, gamma=3.3, h=1000, theta_mean=0.5*np.pi, N_th
     x, y, eta2d = fft_interface.spectral2physical(total_image, [k_axis, k_axis])
     return x,y, eta2d
 
-def JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax):
+def JonswapWave2D(x, y, Hs, Alpha, gamma, theta_mean, smax):
     Nx = len(x)
     Ny = len(y)
     dk = 0.005
@@ -155,7 +155,7 @@ def JonswapWave2D_asymetric(x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h=1000
     eta = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
     return surface_core.Surface('jonswap', eta, [x, y]) 
 
-def JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
+def JonswapWave3D(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
     g = 9.81
     Nt = len(t)
     Nx = len(x)
@@ -530,7 +530,7 @@ if __name__=='__main__':
 
     '''
     x = np.linspace(0,2000, N)
-    x, y, eta2d = JonswapWave2D(x, Tp, Hs, smax)
+    x, y, eta2d = JonswapWave2D_old(x, Tp, Hs, smax)
     print('Hs = ', np.sqrt(np.var(eta2d)))
     plt.figure()
     plt.imshow(eta2d)
@@ -568,17 +568,17 @@ if __name__=='__main__':
     plt.show()
     '''
 
-    # JONSWAP2D Pavel
+    # JONSWAP2D 
     '''    
     dx = 7.5
     dy = 7.5
     x = np.arange(-250, 250, dx)
     y = np.arange(500, 1000, dy)
-    surf2d = JonswapWave2D_Pavel(x, y, Hs, Alpha, gamma, theta_mean, smax)
+    surf2d = JonswapWave2D(x, y, Hs, Alpha, gamma, theta_mean, smax)
     surf2d.plot_3d_as_2d()
     '''
 
-    #JONSWAP 3D similar to Pavel for 2D
+    #JONSWAP 3D similar JONSWAP2D
     '''
     dx = 7.5
     dy = 7.5
@@ -587,7 +587,7 @@ if __name__=='__main__':
     t = np.arange(0, 5, dt)
     x = np.arange(-250, 250, dx)
     y = np.arange(500, 1000, dy)
-    #surf3d = JonswapWave3D_Pavel(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h)
+    #surf3d = JonswapWave3D(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h)
     z = np.linspace(-100,0,100)
     Ux = 0.5*np.exp(5*z)
     Uy = 0

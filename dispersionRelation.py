@@ -8,7 +8,8 @@ from help_tools import plotting_interface
 
 def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)): 
     '''
-    calculaate the wave number for the provided angular frequency or frequencies when there is no current.
+    calculate the wave number for the provided angular frequency or frequencies when there is no current.
+    This method is faster than the one allowing current
 
     Parameters
     ----------
