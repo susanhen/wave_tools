@@ -10,15 +10,16 @@ from scipy import integrate
 from matplotlib import cm
 from help_tools import plotting_interface
 import h5py
+from wave_tools import surface_core, peak_tracking
 
 class Bathymetry:
 
-    def __init__(self, x, bathy_filename='RR23605_bathy.hdmf', test=False):
+    def __init__(self, x, bathy_filename=None):
         dx = x[1] - x[0]
         x_u = x
         self.x = x_u
         self.Nx = len(self.x)
-        if test==False:
+        if not bathy_filename is None:
             # read profile from file
             hf = h5py.File(bathy_filename, 'r')
             h = np.array(hf['bathy'])
@@ -83,23 +84,18 @@ class DirectionalSpectrum:
          *gam**np.exp(-((f-self.fp)**2)/(2*(self.fp*(0.07*(1/2 + 1/2*np.sign(self.fp - f))
         +0.09*(1/2 -1/2*np.sign(self.fp - f))))**2)))
 
-    def seed_f(self, f_min, f_max, N_f, plot_it=False):
+    def distribute_f(self, f_min, f_max, N_f, plot_it=False):
         #'''
-        f = []
-        while len(f)<N_f:
+        f = np.zeros(N_f)
+        N_found = 0
+        while N_found+1<N_f:
             fi = f_min + (f_max - f_min) * np.random.uniform()
             eta = self.S(self.fp) * np.random.uniform() + 1
             if np.sqrt(eta) < np.sqrt(self.S(fi)) + 1:
-                f.append(fi)
-        #'''
-        
-        #f = f_min + (f_max - f_min) * np.random.uniform(size=N_f)
-        '''
-        s1 = 5
-        s2 = 0.1
-        f = np.random.gamma(s1, s2, size=N_f)/(s1*s2*self.Tp)
-        
-        '''
+                f[N_found]=fi
+                N_found = N_found + 1
+
+
         f = np.sort(f)
         if plot_it:
             plt.figure()
@@ -110,7 +106,7 @@ class DirectionalSpectrum:
         return f
 
     def define_realization(self, f_min, f_max, N_f, plot_it=False):
-        f_r = self.seed_f(f_min, f_max, N_f)
+        f_r = self.distribute_f(f_min, f_max, N_f)
         a = np.zeros(N_f)
         df = np.gradient(f_r)
         a = np.sqrt(2*self.S(f_r)*df)
@@ -118,19 +114,14 @@ class DirectionalSpectrum:
 
 class SpectralRealization:
 
-    def __init__(self, DirSpec, f_min, f_max, N_f, dx, test=False, phase=None):
+    def __init__(self, DirSpec, f_min, f_max, N_f, dx):
         self.N_f = N_f
         self.dx = dx
-        if test == False:
-            self.DirSpec = DirSpec
-            self.f_min = f_min
-            self.f_max = f_max
-            self.f_r, self.a = DirSpec.define_realization(f_min, f_max, N_f)
-            self.phase = np.random.uniform(0,2*np.pi,size=self.N_f)
-        else:
-            self.a = np.array([1])
-            self.f_r = np.array([0.1])
-            self.phase = phase
+        self.DirSpec = DirSpec
+        self.f_min = f_min
+        self.f_max = f_max
+        self.f_r, self.a = DirSpec.define_realization(f_min, f_max, N_f)
+        self.phase = np.random.uniform(0,2*np.pi,size=self.N_f)
 
 
     def calc_wavenumber(self, Nx, bathy=None, h=1000):
@@ -143,16 +134,12 @@ class SpectralRealization:
 
         return k_loc
 
-    def invert(self, bathy, ti, x, plot_it=False):
+    def invert(self, bathy, ti, x):
         Nx = len(x)
         k = self.calc_wavenumber(Nx, bathy)
-        print('wavenumber calculated')
         w = 2*np.pi*self.f_r
         H = bathy.H
-        Nt = np.size(ti)
-        
-        zeta = np.zeros((np.size(ti),Nx))
-        print ('before loop')
+        eta = np.zeros((np.size(ti),Nx))
 
         for i in range(0, self.N_f):
             k2H_by_sinh_2kH = np.where(k[i,:]*H < 50,  2*k[i,:]*H / np.sinh(2*k[i,:]*H), 0)
@@ -161,32 +148,23 @@ class SpectralRealization:
             Cg0x = w[-1]/(2*k[-1]*(1+k2H_by_sinh_2kH[-1]))
 
             for j in range(0, np.size(ti)):
-                zeta[j,:] = zeta[j,:] + self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(self.phase[i]+w[i]*ti[j]+ksh)
+                eta[j,:] = eta[j,:] + self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(self.phase[i]+w[i]*ti[j]+ksh)
 
-            print(np.shape(w[i]))
-            print(np.shape(self.phase[i]))
-            print(np.shape(Cgx))
 
             '''
-            zeta += np.outer(self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx)),np.cos(self.phase[i]*np.ones(Nt)+w[i]*ti+np.outer(ksh*,np.ones(Nt))))
+            TODO: make faster!
+            eta += np.outer(self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx)),np.cos(self.phase[i]*np.ones(Nt)+w[i]*ti+np.outer(ksh*,np.ones(Nt))))
             '''
-            '''    
-            if plot_it:
-                plt.figure()
-                plt.plot(x, zeta)
-                plt.xlabel('$x~[\mathrm{m}]$')
-                plt.ylabel('$\eta~[\mathrm{m}]$')
-            '''
-        return zeta
+
+            
+        return eta
 
 
     def vel(self, eta, bathy, ti, x, plot_it=False):
         Nx = len(x)
         k = self.calc_wavenumber(Nx, bathy)
-        
         w = 2*np.pi*self.f_r
         H = bathy.H
-        
         vel = np.zeros((np.size(ti),Nx))
         
         for i in range(0, self.N_f):
@@ -203,3 +181,71 @@ class SpectralRealization:
             plt.ylabel('$\eta~[\mathrm{m}]$')
         return vel
     
+if __name__=='__main__':
+    from_file=True
+    fn = 'example_data/surfprofile'
+    #from_file=False
+    #fn = 'example_data/test'
+
+    if not from_file:
+        dx = 0.5
+        x = np.arange(200, 2200+dx, dx)
+        g = 9.81
+        Tp = 10
+        fp = 1./Tp
+        gam  = 3.3
+        N_f = 100
+        f_min = 0.001
+        f_max = 0.4
+        F = 300000
+
+        # Define Spectrum
+        DirSpec = DirectionalSpectrum(Tp, gam, F)
+        realization = SpectralRealization(DirSpec, f_min, f_max, N_f, dx)
+        print('Directional Spectrum defined')
+
+        # Define bathymetry
+        bathy_filename = 'RR23605_bathy.hdmf'
+        b = Bathymetry(x, bathy_filename)
+        #b.plot()
+        #plotting_interface.show()
+        print('Bathymetry defined')
+
+        # Construct wave field from spectrum
+        Nt = 1200
+        Nx = len(x)
+        eta = np.zeros((Nt, Nx))
+        vel = np.zeros((Nt, Nx))
+        t = np.linspace(0, 120, Nt)
+
+        eta = realization.invert(b, t, x)
+        vel = realization.vel(eta, b,  t, x)
+        bsurf = surface_core.spacetempSurface('surfprofile', eta, [x, t])
+        bsurf.save(fn, 'eta', False)
+        bsurf.save_velocity(fn, vel)
+
+    else:
+        bsurf = surface_core.surface_from_file(fn, spaceTime=True)
+        t = bsurf.t
+        x = bsurf.x
+        eta = bsurf.eta
+        bsurf.load_velocity(fn)
+        vel = bsurf.vel
+
+
+    ax = bsurf.plot_3d_as_2d()
+    pt = peak_tracking.get_PeakTracker(x, t, eta, vel)
+    pt.plot_all_tracks(ax=ax)
+    ax2 = bsurf.plot_3d_as_2d()
+    pt.plot_breaking_tracks(ax=ax2)
+
+    ids_breaking_peaks = pt.get_ids_breaking_peaks()
+    
+    #gt = peak_tracking.get_GroupTracker(x, t, eta, vel)
+    #gt.plot_all_tracks(ax=ax)
+
+    # follow one track
+    
+    peak_dict = pt.get_peak_dict()
+
+    plotting_interface.show()

@@ -287,9 +287,9 @@ class _SpectralAnalysis2d(object):
     def apply_LP_filter(self, limit):
         kx, ky = np.meshgrid(self.kx, self.ky, indexing='ij')
         k = np.sqrt(kx**2 + ky**2)
-        k_hp_filter = (k<limit).astype('int')
-        self.coeffs *= k_hp_filter
-        self.spectrum *= k_hp_filter        
+        k_lp_filter = (k<limit).astype('int')
+        self.coeffs *= k_lp_filter
+        self.spectrum *= k_lp_filter        
 
     def get_1d_MTF(self, ky_only):
         kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
