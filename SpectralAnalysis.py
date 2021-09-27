@@ -278,23 +278,18 @@ class _SpectralAnalysis2d(object):
             return None
         
     def apply_HP_filter(self, limit):
-        # TODO: ensure that it is distinguished between 2D and 3D ... this is for 2d with k (previously (k,w))
-        '''
-        bf = filter_core.BasicFilter((self.Nx,self.Ny))
-        dx =  7.5
-        dkx = self.dkx
-        dky = self.dky
-        kx_hp_filter = bf.high_pass_filter(np.abs(self.kx), limits[0], 0)
-        ky_hp_filter = bf.high_pass_filter(np.abs(self.ky), limits[1], 1)
-        #TODO check if correct and move into filter_core possibly not needed either!
-        kx_hp_filter = _symmetrize2d(kx_hp_filter)
-        ky_hp_filter = _symmetrize2d(ky_hp_filter)
-        '''
         kx, ky = np.meshgrid(self.kx, self.ky, indexing='ij')
         k = np.sqrt(kx**2 + ky**2)
         k_hp_filter = (k>limit).astype('int')
         self.coeffs *= k_hp_filter
         self.spectrum *= k_hp_filter
+
+    def apply_LP_filter(self, limit):
+        kx, ky = np.meshgrid(self.kx, self.ky, indexing='ij')
+        k = np.sqrt(kx**2 + ky**2)
+        k_hp_filter = (k<limit).astype('int')
+        self.coeffs *= k_hp_filter
+        self.spectrum *= k_hp_filter        
 
     def get_1d_MTF(self, ky_only):
         kx_cut = np.where(np.abs(self.kx)<self.x_cut_off, self.kx, 0)
@@ -1019,7 +1014,7 @@ class SpectralAnalysis(object):
             
     def plot(self, extent=None, ax=None):#, fn, waterdepth=None, extent=None, U=None, dB=True, vmin=-60, save=False):
         '''
-        TODO: recheck all arguments sensible to include
+        TODO: recheck all arguments for possible inclusion
         '''
         #FIXME description!
         if self.ND==1:
@@ -1055,6 +1050,9 @@ class SpectralAnalysis(object):
     
     def apply_HP_filter(self, limits):
         self.spectrumND.apply_HP_filter(limits)   
+
+    def apply_LP_filter(self, limits):
+        self.spectrumND.apply_LP_filter(limits)  
 
     def remove_zeroth(self):
         self.spectrumND.remove_zeroth()

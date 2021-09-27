@@ -69,19 +69,3 @@ def breaking_tracking(surf, peakTracker, L, T):
 
 
 
-
-
-'''
-msurf, pt = breaking_tracking(bsurf, 10, 10)
-
-tp, xp = 0, 0
-for i in range(0, np.size(bsurf.t)):
-    for j in range(0, np.size(bsurf.x)):
-        if msurf[i, j] == 1:
-            tp, xp = np.append(tp, bsurf.t[i]), np.append(xp, bsurf.x[j])
-
-plotting_interface.plot_3d_as_2d(bsurf.t, bsurf.x, bsurf.eta)
-plt.scatter(tp[1:], xp[1:], s=10)
-
-plt.show()
-'''

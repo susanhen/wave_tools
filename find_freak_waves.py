@@ -3,7 +3,8 @@ from wave_tools import find_peaks
 
 def find_freak_waves(eta, axis=0, method='crest_over_Hs', factor=1.25):
     '''
-    Find 
+    Find freak waves... be careful... not properly defined statistics for 2d data
+    or too fine data
     '''
     
     Hs = 4*sqrt(var(eta))   

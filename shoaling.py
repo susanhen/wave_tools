@@ -61,11 +61,6 @@ class Bathymetry:
         self.y = y
         self.Nx = len(self.x)
         self.Ny = len(self.y)
-        '''
-        bathy1 = -25 * (y_u<=500)
-        bathy2 = (-0.33*y_u+140)*(np.logical_and(y_u>=550, y_u<= 700))
-        bathy3 = -100*(y_u>=750)
-        '''
         bathy1 = -2 * (y_u<=500)
         bathy2 = (-0.1*y_u+50)*(np.logical_and(y_u>=550, y_u<= 700))
         bathy3 = -25*(y_u>=750)
@@ -89,10 +84,6 @@ class Bathymetry:
         N_f = len(f_r)  
         k_out = np.zeros((N_f, len(self.x), len(self.y)))
         for i in range(N_f):
-        #kt = np.zeros(len(self.h))
-        #   for j in range(0, len(self.h)):
-            #kt = np.abs(fsolve(lambda k: ((2*np.pi*f_r[i,0])**2 - 9.81*k*np.tanh(k*(-self.h)) ), 0.01*np.ones(self.Nx), xtol=0.01))
-            
             w = 2*np.pi*f_r[i,0]
             ki = w**2/(9.81)
             wt = np.sqrt(9.81*ki*np.tanh(ki*(-self.h)))
@@ -103,11 +94,7 @@ class Bathymetry:
                 latter = 9.81*np.tanh(ki*(-self.h))
                 ki = w**2/(latter)
                 wt = np.sqrt(latter)                              
-                count = count + 1
-                
-                
-            #kt = (2*np.pi*f_r[i,0])**2 - 9.81*k*np.tanh(k*(-self.h)) )
-            
+                count = count + 1          
             k_out[i,:,:] = np.outer(np.ones(self.Nx), ki)
         return k_out
             
@@ -163,14 +150,7 @@ class DirectionalSpectrum:
             if np.sqrt(eta) < np.sqrt(self.S(fi)) + 1:
                 f.append(fi)
         #'''
-        
-        #f = f_min + (f_max - f_min) * np.random.uniform(size=N_f)
-        '''
-        s1 = 5
-        s2 = 0.1
-        f = np.random.gamma(s1, s2, size=N_f)/(s1*s2*self.Tp)
-        
-        '''
+
         f = np.sort(f)
         if plot_it:
             plt.figure()
@@ -211,12 +191,7 @@ class DirectionalSpectrum:
     
     def define_realization(self, f_min, f_max, theta_min, theta_max, N_f, N_theta, plot_it=True):
         f_r, Theta_r = self.seed_f_theta(f_min, f_max, theta_min, theta_max, N_f, N_theta)
-        #print('theta seeded')
-        #Q = quad(self.S, f_min, f_max)[0]
-        #print('Q = ', Q)
-        
-        #print('test = ', integrate.nquad(self.D, [[f_min, f_max],[0, 2*np.pi]]))
-        #Hs = 4*np.sqrt(Q)
+
         a = np.zeros((N_f, N_theta))
         '''
         for i in range(1, N_f-1):
@@ -233,7 +208,6 @@ class DirectionalSpectrum:
         dTheta = np.gradient(Theta_r, axis=1)
         dA = df*dTheta
         a = np.sqrt(2*self.Sdir(f_r, Theta_r) *dA)
-        #aa = a.flatten()
         if plot_it:
             fig = plt.figure(figsize=(14,8))
             ax = fig.add_subplot(111, projection='3d')

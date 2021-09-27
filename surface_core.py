@@ -192,10 +192,10 @@ class _Surface2D(object):
         deta_dx, deta_dy = np.gradient(self.eta, self.x, self.y)
         return deta_dy
     def plot_3d_surface(self):
-        plotting_interface.plot_3d_surface(self.x, self.y, self.eta)
+        plotting_interface.plot_3d_surf_x_y(self.x, self.y, self.eta)
 
     def plot_3d_as_2d(self):
-        plotting_interface.plot_3d_as_2d(self.x, self.y, self.eta)
+        plotting_interface.plot_surf_x_y(self.x, self.y, self.eta)
             
     def fft_interpolate(self, inter_factor_x, inter_factor_y):
         x_inter, y_inter, eta_inter = fft_interpolate.fft_interpol2d(self.x, self.y, self.eta, inter_factor_x*self.Nx, inter_factor_y*self.Ny)
