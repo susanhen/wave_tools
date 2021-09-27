@@ -31,6 +31,7 @@ plt.show()
 ```
 <img src="figures/surf2d.jpg" width="500"><img src="figures/surf3d.jpg" width="500">
 
+
 # Convert to Fourier domain
 ```python
 spec2d = surf2d.define_SpectralAnalysis()
