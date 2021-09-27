@@ -26,9 +26,25 @@ x = np.arange(-250, 250, dx)
 y = np.arange(500, 1000, dy)
 surf2d = ConstructWave.JonswapWave2D(x, y, Hs, Alpha, gamma, theta_mean, smax)
 surf2d.plot_3d_as_2d()
+surf2d.plot_3d_surface()
 plt.show()
 ```
-<img src="surf2d.jpg" width="600">
+<img src="figures/surf2d.jpg" width="500">
+<img src="figures/surf3d.jpg" width="500">
+
+# Convert to Fourier domain
+```python
+spec2d = surf2d.define_SpectralAnalysis()
+# plot the symmetric 2d spectrum
+spec2d.plot()
+plt.savefig('spec2d.jpg', bbox_inches='tight')
+# plot the symmetric 2d spectrum for the given extent
+spec2d.plot(extent=[-0.2,0.2,-0.2,0.2])
+plt.savefig('spec2d_extent.jpg', bbox_inches='tight')
+```
+
+<img src="figures/spec2d.jpg" width="500">
+<img src="figures/spec2d_extent.jpg" width="500">
 
 # Filter high frequencies
 
