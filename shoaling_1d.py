@@ -53,13 +53,13 @@ class Bathymetry:
         plt.xlabel(r'$x~[\mathrm{m}]$')
         plt.ylabel(r'$z~[\mathrm{m}]$')
 
-    def calc_wavenumber(self, f_r):
-        N_f = np.size(f_r)
+    def calc_wavenumber(self, f):
+        N_f = np.size(f)
         k_out = np.zeros((N_f, self.Nx))
         eps = 10**(-6)
         N_max = 100
         for i in range(N_f):
-            w = 2*np.pi*f_r[i]
+            w = 2*np.pi*f[i]
             ki = w**2/(9.81)
             wt = np.sqrt(9.81*ki*np.tanh(ki*(-self.h)))
             count = 0
@@ -108,11 +108,11 @@ class Spectrum:
         return f
 
     def define_realization(self, f_min, f_max, N_f, plot_it=False):
-        f_r = self.distribute_f(f_min, f_max, N_f)
+        f = self.distribute_f(f_min, f_max, N_f)
         a = np.zeros(N_f)
-        df = np.gradient(f_r)
-        a = np.sqrt(2*self.S(f_r)*df)
-        return f_r, a
+        df = np.gradient(f)
+        a = np.sqrt(2*self.S(f)*df)
+        return f, a
 
     def plot(self):
         f = self.distribute_f(0, 0.3, 200)
@@ -130,18 +130,18 @@ class SpectralRealization:
         self.DirSpec = DirSpec
         self.f_min = f_min
         self.f_max = f_max
-        self.f_r, self.a = DirSpec.define_realization(f_min, f_max, N_f)
-        self.w_r = 2*np.pi*self.f_r
+        self.f, self.a = DirSpec.define_realization(f_min, f_max, N_f)
+        self.w = 2*np.pi*self.f
         self.phase = np.random.uniform(0,2*np.pi,size=self.N_f)
 
 
     def calc_wavenumber(self, Nx, bathy=None, h=1000):
 
         if bathy==None:
-            k_loc_f = fsolve((lambda k: ((9.81*k*np.tanh(k*h)) - (self.w_r[:,0])**2)), 0.01*np.ones(self.N_f))
+            k_loc_f = fsolve((lambda k: ((9.81*k*np.tanh(k*h)) - (self.w[:,0])**2)), 0.01*np.ones(self.N_f))
             k_loc = np.outer(k_loc_f, np.ones(self.Nx)).reshape((self.N_f, Nx))
         else:
-            k_loc = bathy.calc_wavenumber(self.f_r)
+            k_loc = bathy.calc_wavenumber(self.f)
 
         return k_loc
 
@@ -156,11 +156,11 @@ class SpectralRealization:
             K2H = 2*k[i,:]*H 
             k2H_by_sinh_2kH = np.where(K2H>0,  K2H / np.sinh(K2H), 0)
             ksh = np.cumsum(k[i,:]*self.dx)
-            Cgx = self.w_r[i]/(2*k[i]*(1+k2H_by_sinh_2kH))
-            Cg0x = self.w_r[-1]/(2*k[-1]*(1+k2H_by_sinh_2kH[-1]))
+            Cgx = self.w[i]/(2*k[i]*(1+k2H_by_sinh_2kH))
+            Cg0x = self.w[-1]/(2*k[-1]*(1+k2H_by_sinh_2kH[-1]))
 
             for j in range(0, Nt):
-                eta[j,:] = eta[j,:] + self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(self.phase[i]+self.w_r[i]*ti[j]+ksh)
+                eta[j,:] = eta[j,:] + self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(self.phase[i]+self.w[i]*ti[j]+ksh)
 
 
             '''
@@ -172,10 +172,10 @@ class SpectralRealization:
         return eta
 
 
-    def vel(self, eta, bathy, ti, x, plot_it=False):
+    def vel(self, eta, bathy, ti, x):
         Nx = len(x)
         k = self.calc_wavenumber(Nx, bathy)
-        w = 2*np.pi*self.f_r
+        w = 2*np.pi*self.f
         H = bathy.H
         vel = np.zeros((np.size(ti),Nx))
         
@@ -186,11 +186,8 @@ class SpectralRealization:
             Cg0x = w[-1]/(2*k[-1]*(1+k2H_by_sinh_2kH[-1]))
             for j in range(0,np.size(ti)):
                 vel[j,:] += self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx))*(-w[i])/np.sinh(k[i,:]*H)*np.cosh(k[i,:]*(eta[j,:]+H))*np.cos(self.phase[i]+w[i]*ti[j]+ksh)
-        if plot_it:
-            plt.figure()
-            plt.plot(x, vel)
-            plt.xlabel('$x~[\mathrm{m}]$')
-            plt.ylabel('$\eta~[\mathrm{m}]$')
+            # TODO: make it faster!
+            # TODO combine vel and eta
         return vel
     
 if __name__=='__main__':
