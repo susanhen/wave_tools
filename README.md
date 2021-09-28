@@ -29,7 +29,7 @@ surf2d.plot_3d_as_2d()
 surf2d.plot_3d_surface()
 plt.show()
 ```
-<img src="figures/surf2d.jpg" height="300"><img src="figures/surf3d.jpg" height="300">
+<img src="figures/surf2d.jpg" height="300">  <img src="figures/surf3d.jpg" height="300">
 
 
 # Convert to Fourier domain
@@ -37,13 +37,12 @@ plt.show()
 spec2d = surf2d.define_SpectralAnalysis()
 # plot the symmetric 2d spectrum
 spec2d.plot()
-plt.savefig('spec2d.jpg', bbox_inches='tight')
 # plot the symmetric 2d spectrum for the given extent
 spec2d.plot(extent=[-0.2,0.2,-0.2,0.2])
-plt.savefig('spec2d_extent.jpg', bbox_inches='tight')
+plt.show()
 ```
 
-<img src="figures/spec2d.jpg" height="300"><img src="figures/spec2d_extent.jpg" height="300">
+<img src="figures/spec2d.jpg" height="300">  <img src="figures/spec2d_extent.jpg" height="300">
 
 # Filter high frequencies
 
@@ -91,5 +90,21 @@ bsurf.save_velocity(fn, vel)
 
 # Peak tracking
 Here we reuse the shoaling case with a different bathymetry over a longer simulation time. The peaks are then tracked and wave breaking is esimated along each peak. We can plot the surface elevation over time and space with all tracked peaks and only the tracks where breaking occurs.
+
+```python
+fn = '../PJ_playground/surfprofile'
+bsurf = surface_core.surface_from_file(fn, spaceTime=True)
+bsurf.load_velocity(fn)
+pt = peak_tracking.get_PeakTracker(bsurf.x, bsurf.t, bsurf.eta, bsurf.vel)
+ax1 = bsurf.plot_3d_as_2d()
+pt.plot_all_tracks(ax=ax1)
+ax2 = bsurf.plot_3d_as_2d()
+pt.plot_breaking_tracks(ax=ax2)
+plt.show()
+```
+
+![simulation_with_all_peak_tracks](https://user-images.githubusercontent.com/44230529/135034055-0c072754-b35c-48ff-a01b-b77437389c90.jpg)
+
+![simulation_with_breaking_tracks](https://user-images.githubusercontent.com/44230529/135034066-6ec397c7-cb8c-4179-bfae-9c6165905232.jpg)
 
 # Plotting the wave along a peak
