@@ -77,13 +77,16 @@ spec = shoaling_1d.Spectrum(Tp, gamma, F)
 spec.plot()
 plotting_interface.show()
 ```
+
 <img src="figures/spec1d.jpg" height="300">
+
 ```python
 # Define bathymetry
 b = shoaling_1d.Bathymetry(x, bathy_filename=None)
 b.plot()
 plotting_interface.show()
 ```
+
 <img src="figures/bathy.jpg" height="300">
 
 ```python
