@@ -29,7 +29,7 @@ surf2d.plot_3d_as_2d()
 surf2d.plot_3d_surface()
 plt.show()
 ```
-<img src="figures/surf2d.jpg" width="500"><img src="figures/surf3d.jpg" width="500">
+<img src="figures/surf2d.jpg" width="300"><img src="figures/surf3d.jpg" width="300">
 
 
 # Convert to Fourier domain
@@ -43,7 +43,7 @@ spec2d.plot(extent=[-0.2,0.2,-0.2,0.2])
 plt.savefig('spec2d_extent.jpg', bbox_inches='tight')
 ```
 
-<img src="figures/spec2d.jpg" width="500"><img src="figures/spec2d_extent.jpg" width="500">
+<img src="figures/spec2d.jpg" width="300"><img src="figures/spec2d_extent.jpg" width="300">
 
 # Filter high frequencies
 
