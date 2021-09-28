@@ -103,8 +103,6 @@ pt.plot_breaking_tracks(ax=ax2)
 plt.show()
 ```
 
-![simulation_with_all_peak_tracks](https://user-images.githubusercontent.com/44230529/135034055-0c072754-b35c-48ff-a01b-b77437389c90.jpg)
-
-![simulation_with_breaking_tracks](https://user-images.githubusercontent.com/44230529/135034066-6ec397c7-cb8c-4179-bfae-9c6165905232.jpg)
+<img src="figures/simulation_with_all_peak_tracks.jpg" height="300">  <img src="figures/simulation_with_breaking_tracks.jpg" height="300">
 
 # Plotting the wave along a peak
