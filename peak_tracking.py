@@ -163,6 +163,54 @@ class Peak:
 
     def get_breaking_start_ind_t(self, t0=0):
         return int((self.t_start-t0)/self.dt) + self.breaking_start_ind
+
+
+    def plot_track(self, x, t, data, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
+        '''
+        Plots the evolution along the track and marks the edge
+        '''
+        if ax == None:
+            fig, ax = plotting_interface.subplots(figsize=(15,5))
+        t_ind, x_ind = self.get_track_indices(x0=x[0], t0=t[0])
+        dt = t[1] - t[0]
+        dx = x[1] - x[0]
+        interval_size = int(x_extent/dx)
+        N_skip = np.max([1, int(dt_plot/dt)])
+        N_max_peak_positions = x_ind.size
+        if N_max_peak_positions<N_skip:
+            N_skip = 1
+        colors = plotting_interface.get_cmap(cm_name)(np.linspace(0.1,1,N_max_peak_positions))
+        for i in np.arange(0, N_max_peak_positions, N_skip):
+            start_ind = np.max([0, x_ind[i] - int(0.2*interval_size)])
+            end_ind = np.min([x_ind[i] + int(0.8*interval_size), len(x)-2])
+            ax.plot(x[start_ind:end_ind+1], data[t_ind[i], start_ind:end_ind+1], color=colors[i])
+            ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'x', color=colors[i])
+        return ax
+
+    def plot_track_and_mark_breaking(self, x, t, data, mask, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
+        '''
+        Plots the evolution along the track and marks where breaking occurs
+        '''
+        if ax == None:
+            fig, ax = plotting_interface.subplots(figsize=(15,5))
+        t_ind, x_ind = self.get_track_indices(x0=x[0], t0=t[0])
+        dt = t[1] - t[0]
+        dx = x[1] - x[0]
+        interval_size = int(x_extent/dx)
+        N_skip = np.max([1, int(dt_plot/dt)])
+        N_max_peak_positions = x_ind.size
+        if N_max_peak_positions<N_skip:
+            N_skip = 1
+        colors = plotting_interface.get_cmap(cm_name)(np.linspace(0.1,1,N_max_peak_positions))
+        for i in np.arange(0, N_max_peak_positions, N_skip):
+            start_ind = np.max([0, x_ind[i] - int(0.2*interval_size)])
+            end_ind = np.min([x_ind[i] + int(0.8*interval_size), len(x)-2])
+            ax.plot(x[start_ind:end_ind+1], data[t_ind[i], start_ind:end_ind+1], color=colors[i])
+            # If there is breaking happening in this time step in the observed interval
+            if sum(mask[t_ind[i], start_ind:end_ind+1])>0:
+                first_breaking_ind = start_ind + np.argwhere(mask[t_ind[i], start_ind:end_ind+1]==1)#[-1]
+                ax.plot(x[first_breaking_ind], data[t_ind[i], first_breaking_ind], 'rx')#, color=colors[i])
+        return ax
       
 
 
