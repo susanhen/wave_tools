@@ -31,6 +31,13 @@ plt.show()
 ```
 <img src="figures/surf2d.jpg" height="300">  <img src="figures/surf3d.jpg" height="300">
 
+# Interpolation based on FFT
+
+# Compare interpolation, plotting along one axis
+
+# Finding peaks
+Two criteria are implemented. all peaks and peaks between zero crossings.
+
 
 # Convert to Fourier domain
 ```python
@@ -48,30 +55,43 @@ plt.show()
 
 
 # Example of shoaling case
-Simulates wave shoaling and saves the surface elevation and the horizontal velocity to file
-
+At first we have to define some parameters of the wavefield
 ```python
-#shoaling
 from wave_tools import shoaling_1d
 dx = 0.5
 x = np.arange(200, 2200+dx, dx)
 g = 9.81
 Tp = 10
 fp = 1./Tp
-gam  = 3.3
-N_f = 100
+gamma  = 3.3
+Nf = 100
 f_min = 0.001
 f_max = 0.4
 F = 300000
+```
 
-# Define Spectrum
-DirSpec = shoaling_1d.DirectionalSpectrum(Tp, gam, F)
-realization = shoaling_1d.SpectralRealization(DirSpec, f_min, f_max, N_f, dx)
 
+```python
+# Create a 1D spectrum and plot it
+spec = shoaling_1d.Spectrum(Tp, gamma, F)
+spec.plot()
+plotting_interface.show()
+```
+
+<img src="figures/spec1d.jpg" height="300">
+
+```python
 # Define bathymetry
-bathy_filename = None
-b = shoaling_1d.Bathymetry(x, bathy_filename)
-#b.plot()
+b = shoaling_1d.Bathymetry(x, bathy_filename=None)
+b.plot()
+plotting_interface.show()
+```
+
+<img src="figures/bathy.jpg" height="300">
+
+```python
+# Create a realization with random phases
+realization = shoaling_1d.SpectralRealization(spec, f_min, f_max, Nf, dx)
 
 # Construct wave field from spectrum
 Nt = 120
@@ -83,10 +103,19 @@ t = np.linspace(0, 12, Nt)
 eta = realization.invert(b, t, x)
 vel = realization.vel(eta, b,  t, x)
 bsurf = surface_core.spacetempSurface('surfprofile', eta, [x, t])
+bsurf.plot_3d_as_2d()
+```
+<img src="figures/test_surf.jpg" height="300">
+
+# Save surface to file
+The simulated surface elevation and the underlying grid are saved to file in one go. If the horizontal velocity has to be saved seperately. It is not always part of a surface object. The velocity is necessary when peak tracking or edge tracking is desired in order to calculate the wave breaking.
+```python
 fn = 'example_data/test.hdmf'
 bsurf.save(fn, 'eta', False)
 bsurf.save_velocity(fn, vel)
 ```
+
+
 
 # Peak tracking
 Here we reuse the shoaling case with a different bathymetry over a longer simulation time. The peaks are then tracked and wave breaking is esimated along each peak. We can plot the surface elevation over time and space with all tracked peaks and only the tracks where breaking occurs.
@@ -103,8 +132,6 @@ pt.plot_breaking_tracks(ax=ax2)
 plt.show()
 ```
 
-![simulation_with_all_peak_tracks](https://user-images.githubusercontent.com/44230529/135034055-0c072754-b35c-48ff-a01b-b77437389c90.jpg)
-
-![simulation_with_breaking_tracks](https://user-images.githubusercontent.com/44230529/135034066-6ec397c7-cb8c-4179-bfae-9c6165905232.jpg)
+<img src="figures/simulation_with_all_peak_tracks.jpg" height="300">  <img src="figures/simulation_with_breaking_tracks.jpg" height="300">
 
 # Plotting the wave along a peak
