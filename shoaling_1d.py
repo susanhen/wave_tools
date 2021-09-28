@@ -49,7 +49,9 @@ class Bathymetry:
 
     def plot(self):
         plt.figure()
-        plt.plot(self.x, self.h, 'x')
+        plt.plot(self.x, self.h, 'k', linewidth=0.8)
+        plt.xlabel(r'$x~[\mathrm{m}]$')
+        plt.ylabel(r'$z~[\mathrm{m}]$')
 
     def calc_wavenumber(self, f_r):
         N_f = np.size(f_r)
@@ -70,7 +72,7 @@ class Bathymetry:
             k_out[i,:] = ki
         return k_out
 
-class DirectionalSpectrum:
+class Spectrum:
 
     def __init__(self, Tp, gam, F):
         self.Tp = Tp
@@ -88,11 +90,11 @@ class DirectionalSpectrum:
         #'''
         f = np.zeros(N_f)
         N_found = 0
-        while N_found+1<N_f:
+        while N_found<N_f:
             fi = f_min + (f_max - f_min) * np.random.uniform()
             eta = self.S(self.fp) * np.random.uniform() + 1
             if np.sqrt(eta) < np.sqrt(self.S(fi)) + 1:
-                f[N_found]=fi
+                f[N_found] = fi
                 N_found = N_found + 1
 
 
@@ -112,6 +114,14 @@ class DirectionalSpectrum:
         a = np.sqrt(2*self.S(f_r)*df)
         return f_r, a
 
+    def plot(self):
+        f = self.distribute_f(0, 0.3, 200)
+        plt.figure()
+        plt.plot(f, self.S(f), 'k', linewidth=0.8)
+        plt.xlabel(r'$f~[Hz]$')
+        plt.ylabel(r'$\mathrm{S}(f)$')
+
+
 class SpectralRealization:
 
     def __init__(self, DirSpec, f_min, f_max, N_f, dx):
@@ -121,13 +131,14 @@ class SpectralRealization:
         self.f_min = f_min
         self.f_max = f_max
         self.f_r, self.a = DirSpec.define_realization(f_min, f_max, N_f)
+        self.w_r = 2*np.pi*self.f_r
         self.phase = np.random.uniform(0,2*np.pi,size=self.N_f)
 
 
     def calc_wavenumber(self, Nx, bathy=None, h=1000):
 
         if bathy==None:
-            k_loc_f = fsolve((lambda k: ((9.81*k*np.tanh(k*h)) - (2*np.pi*self.f_r[:,0])**2)), 0.01*np.ones(self.N_f))
+            k_loc_f = fsolve((lambda k: ((9.81*k*np.tanh(k*h)) - (self.w_r[:,0])**2)), 0.01*np.ones(self.N_f))
             k_loc = np.outer(k_loc_f, np.ones(self.Nx)).reshape((self.N_f, Nx))
         else:
             k_loc = bathy.calc_wavenumber(self.f_r)
@@ -137,18 +148,19 @@ class SpectralRealization:
     def invert(self, bathy, ti, x):
         Nx = len(x)
         k = self.calc_wavenumber(Nx, bathy)
-        w = 2*np.pi*self.f_r
         H = bathy.H
-        eta = np.zeros((np.size(ti),Nx))
+        Nt = len(ti)
+        eta = np.zeros((Nt,Nx))
 
         for i in range(0, self.N_f):
-            k2H_by_sinh_2kH = np.where(k[i,:]*H < 50,  2*k[i,:]*H / np.sinh(2*k[i,:]*H), 0)
+            K2H = 2*k[i,:]*H 
+            k2H_by_sinh_2kH = np.where(K2H>0,  K2H / np.sinh(K2H), 0)
             ksh = np.cumsum(k[i,:]*self.dx)
-            Cgx = w[i]/(2*k[i]*(1+k2H_by_sinh_2kH))
-            Cg0x = w[-1]/(2*k[-1]*(1+k2H_by_sinh_2kH[-1]))
+            Cgx = self.w_r[i]/(2*k[i]*(1+k2H_by_sinh_2kH))
+            Cg0x = self.w_r[-1]/(2*k[-1]*(1+k2H_by_sinh_2kH[-1]))
 
-            for j in range(0, np.size(ti)):
-                eta[j,:] = eta[j,:] + self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(self.phase[i]+w[i]*ti[j]+ksh)
+            for j in range(0, Nt):
+                eta[j,:] = eta[j,:] + self.a[i]*np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(self.phase[i]+self.w_r[i]*ti[j]+ksh)
 
 
             '''
@@ -200,8 +212,8 @@ if __name__=='__main__':
         F = 300000
 
         # Define Spectrum
-        DirSpec = DirectionalSpectrum(Tp, gam, F)
-        realization = SpectralRealization(DirSpec, f_min, f_max, N_f, dx)
+        spec = Spectrum(Tp, gam, F)
+        realization = SpectralRealization(spec, f_min, f_max, N_f, dx)
         print('Directional Spectrum defined')
 
         # Define bathymetry
