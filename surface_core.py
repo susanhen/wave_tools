@@ -145,14 +145,15 @@ class _Surface2D(object):
         returns two arrays, y and eta(xi)
         '''
         if y_sub==None:
-            y_sub = [0, self.Ny]
-        y_sub_ind = np.where(np.logical_and(self.y>y_sub[0], abs(self.y)<y_sub[1]))#[0]
+            y_sub_ind = np.arange(0, self.Ny)
+        else:
+            y_sub_ind = np.where(np.logical_and(self.y>=y_sub[0], abs(self.y)<=y_sub[1]))#[0]
         if len(y_sub_ind)<=0:
             print('y_sub does not define subspace on the y-axis')
             return None
         else:
-            y_sub_ind = y_sub_ind[0]
-        x_ind = np.argmin(abs(self.x/xi-1))
+            y_sub_ind = y_sub_ind#[0]
+        x_ind = np.argmin(abs(self.x-xi))
         if np.logical_or(x_ind<self.Nx, x_ind>=0):
             return self.y[y_sub_ind], self.eta[x_ind,y_sub_ind]
         else:
@@ -166,14 +167,15 @@ class _Surface2D(object):
         returns two arrays, x and eta(yi)
         '''
         if x_sub==None:
-            x_sub = [0, self.Nx]
-        x_sub_ind = np.where(np.logical_and(self.x>x_sub[0], abs(self.x)<x_sub[1]))#[0]
+            x_sub_ind = np.arange(0, self.Nx)
+        else:
+            x_sub_ind = np.where(np.logical_and(self.x>x_sub[0], abs(self.x)<x_sub[1]))#[0]
         if len(x_sub_ind)<=0:
             print('x_sub does not define subspace on the x-axis')
             return None
         else:
             x_sub_ind = x_sub_ind[0]     
-        y_ind = np.argmin(abs(self.x/yi-1))
+        y_ind = np.argmin(abs(self.y-yi))
         if np.logical_or(y_ind<self.Ny, y_ind>=0):
             return self.x[x_sub_ind], self.eta[x_sub_ind,y_ind]
         else:
@@ -691,12 +693,36 @@ class Surface(object):
         return Surface(name, illumination_function*theta_l, self.grid)  
         
     def eta_at_xi(self, xi, y_sub=None, z_sub=None):
+        '''
+        Extract data at the point xi (physical position)
+        Parameters:
+        -----------
+                    input
+                            xi          float
+                                        position along x-axis where data extraction should happen
+                            y_sub       tuple
+                                        maximum and minimum value for limiting y_axis, if None: hole axis
+                            z_sub       tuple
+                                        maximum and minimum value for limiting z_axis, if None: hole axis
+        '''
         if self.ND==2:
             return self.etaND.eta_at_xi(xi, y_sub)
         elif self.ND==3:
             return self.etaND.eta_at_xi(xi, y_sub, z_sub)
         
     def eta_at_yi(self, yi, x_sub=None, z_sub=None):
+        '''
+        Extract data at the point yi (physical position)
+        Parameters:
+        -----------
+                    input
+                            yi          float
+                                        position along y-axis where data extraction should happen
+                            x_sub       tuple
+                                        maximum and minimum value for limiting x_axis, if None: hole axis
+                            z_sub       tuple
+                                        maximum and minimum value for limiting z_axis, if None: hole axis
+        '''
         if self.ND==2:
             return self.etaND.eta_at_yi(yi, x_sub)
         elif self.ND==3:
