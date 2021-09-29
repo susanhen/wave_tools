@@ -135,7 +135,7 @@ plt.show()
 <img src="figures/simulation_with_all_peak_tracks.jpg" height="300">  <img src="figures/simulation_with_breaking_tracks.jpg" height="300">
 
 # Plotting the wave along a peak
-Choose a track a long a peak and plot how it evolves.
+Choose a track a long a peak and plot how the provided data evolves. The extent in x-direction can be specified as well as the time stepping for the evolution. 
 ```python
 ids_breaking_peaks = pt.get_ids_breaking_peaks()
 chosen_peak = pt.peaks[ids_breaking_peaks[2]]
@@ -143,4 +143,6 @@ chosen_peak.plot_track(bsurf.x, bsurf.t, bsurf.eta, x_extent=70, dt_plot=1., cm_
 chosen_peak.plot_track_and_mark_breaking(bsurf.x, bsurf.t, bsurf.eta, x_extent=70, dt_plot=1., cm_name='Blues', ax=None)
 ```
 <img src="figures/peak_along_track.jpg" height="300">
+plot_track() marks the peaks. Sometimes multiple peaks can be in the figure and therefore the tracked peak is marked.
 <img src="figures/peak_along_track_marked.jpg" height="300">
+Here the peak is marked in with a read cross if the breaking criterion exceeds the threshold (per default Bx>0.85)
