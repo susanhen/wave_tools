@@ -32,8 +32,27 @@ plt.show()
 <img src="figures/surf2d.jpg" height="300">  <img src="figures/surf3d.jpg" height="300">
 
 # Interpolation based on FFT
+The methods achieves a higher resolution by zero filling in the Fourier domain
+For each axis one can indicate a factor by which the amount of points should be increased. 
+```python
+surf2d_interpolated = surf2d.fft_interpolate(2,2)
+surf2d_interpolated.plot_3d_as_2d()
+plotting_interface.show()
+```
+<img src="figures/surf2d_interpolated.jpg" height="300">
 
 # Compare interpolation, plotting along one axis
+For better comparison we may extract data points at a given point (here x=10)
+```python
+y_loc, eta_loc = surf2d.eta_at_xi(10)
+y_loc_inter, eta_loc_inter = surf2d_interpolated.eta_at_xi(10)
+plotting_interface.plot(y_loc, eta_loc, label=r'$\mathrm{raw}$')
+plotting_interface.plot(y_loc_inter, eta_loc_inter, label=r'$\mathrm{interpolated}$')
+plotting_interface.label_x_eta()
+plotting_interface.legend()
+plotting_interface.show()
+```
+<img src="figures/compare_raw_inter.jpg" height="300">
 
 # Finding peaks
 Two criteria are implemented. all peaks and peaks between zero crossings.
@@ -135,10 +154,14 @@ plt.show()
 <img src="figures/simulation_with_all_peak_tracks.jpg" height="300">  <img src="figures/simulation_with_breaking_tracks.jpg" height="300">
 
 # Plotting the wave along a peak
-Choose a track a long a peak and plot how it evolves.
+Choose a track a long a peak and plot how the provided data evolves. The extent in x-direction can be specified as well as the time stepping for the evolution. 
 ```python
 ids_breaking_peaks = pt.get_ids_breaking_peaks()
 chosen_peak = pt.peaks[ids_breaking_peaks[2]]
 chosen_peak.plot_track(bsurf.x, bsurf.t, bsurf.eta, x_extent=70, dt_plot=1., cm_name='Blues', ax=None)
+chosen_peak.plot_track_and_mark_breaking(bsurf.x, bsurf.t, bsurf.eta, x_extent=70, dt_plot=1., cm_name='Blues', ax=None)
 ```
 <img src="figures/peak_along_track.jpg" height="300">
+plot_track() marks the peaks. Sometimes multiple peaks can be in the figure and therefore the tracked peak is marked.
+<img src="figures/peak_along_track_marked.jpg" height="300">
+Here the peak is marked in with a read cross if the breaking criterion exceeds the threshold (per default Bx>0.85)
