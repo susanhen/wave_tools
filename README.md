@@ -32,8 +32,27 @@ plt.show()
 <img src="figures/surf2d.jpg" height="300">  <img src="figures/surf3d.jpg" height="300">
 
 # Interpolation based on FFT
+The methods achieves a higher resolution by zero filling in the Fourier domain
+For each axis one can indicate a factor by which the amount of points should be increased. 
+```python
+surf2d_interpolated = surf2d.fft_interpolate(2,2)
+surf2d_interpolated.plot_3d_as_2d()
+plotting_interface.show()
+```
+<img src="figures/surf2d_interpolated.jpg" height="300">
 
 # Compare interpolation, plotting along one axis
+For better comparison we may extract data points at a given point (here x=10)
+```python
+y_loc, eta_loc = surf2d.eta_at_xi(10)
+y_loc_inter, eta_loc_inter = surf2d_interpolated.eta_at_xi(10)
+plotting_interface.plot(y_loc, eta_loc, label=r'$\mathrm{raw}$')
+plotting_interface.plot(y_loc_inter, eta_loc_inter, label=r'$\mathrm{interpolated}$')
+plotting_interface.label_x_eta()
+plotting_interface.legend()
+plotting_interface.show()
+```
+<img src="figures/compare_raw_inter.jpg" height="300">
 
 # Finding peaks
 Two criteria are implemented. all peaks and peaks between zero crossings.
