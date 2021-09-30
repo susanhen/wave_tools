@@ -1,6 +1,6 @@
 import numpy as np
 from wave_tools import find_peaks, fft_interface, grouping
-from help_tools import plotting_interface
+from help_tools import plotting_interface, convolutional_filters
 import matplotlib.pyplot as plt
 
 def get_common_indices(index_list1, index_list2):
@@ -157,7 +157,7 @@ class Edge:
 
 
 class EdgeTracker:
-    def __init__(self, x, t, data0, mask0, max_edge_dist, cmax=10.0, high_edge_thresh=3.0, long_edge_thresh=300):
+    def __init__(self, x, t, data0, max_edge_dist, mask0=None, cmax=10.0, high_edge_thresh=3.0, long_edge_thresh=300):
         self.x = x
         self.t = t
         self.Nx = len(x)
@@ -179,6 +179,8 @@ class EdgeTracker:
         self.high_edge_thresh = high_edge_thresh
         self.long_edge_thresh = long_edge_thresh
         self.max_edge_dist = max_edge_dist
+        if mask0 is None:
+            mask0 = np.zeros(data0.shape)
         for i in range(0, self.N_edges):
             edge_index = edge_location_indices[i]
             breaking = np.sum(mask0[edge_index:edge_index+max_edge_dist])>0
@@ -198,13 +200,15 @@ class EdgeTracker:
                 self.pc = np.append(self.pc, self.edges[i].cb)
         self.bindex = np.delete(self.bindex, 0, 0)
 
-    def track_edges(self, ti, data, mask, max_dist=4):
+    def track_edges(self, ti, data, mask=None, max_dist=4):
         '''
         find edges for given data track edges found
         Old paths are continued or stopped, new paths are added
 
         max_dist: maximum number of grid points edge tramaskled since last time step
         '''
+        if mask is None:
+            mask = np.zeros(data.shape)
         edge_location_indices = list(find_peaks.find_peaks(data, method=self.method))
         self.edge_location_collector.append(edge_location_indices)
         indices_to_be_removed = []
@@ -412,7 +416,7 @@ class EdgeTracker:
         return self.plot_specific_tracks_and_mark_breaking(data, mask, ids, N, x_extent=x_extent, dt_plot=dt_plot)            
 
 
-def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15):
+def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True):
     '''
     Creates and instance of edge Tracker and tracks all edges and returns the instance
 
@@ -429,9 +433,16 @@ def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15):
                         breaking mask
                 max_edge_dist float
                         maximum distance from edge to wave breaking along x-axis
-                cmax    maximum crest speed
+                cmax    float
+                        maximum crest speed
+                filter_input bool
+                        switch for preprocessing inputdata
     '''
-    pt = EdgeTracker(x, t, data[0,:], mask[0,:], max_edge_dist, cmax=cmax)
+    if filter_input:
+        input = (convolutional_filters.apply_Gaussian_blur(data))
+        data = np.gradient(convolutional_filters.apply_edge_detection(input), axis=1)
+
+    pt = EdgeTracker(x, t, data[0,:], max_edge_dist, mask0=mask[0,:], cmax=cmax)
     for i in range(1, len(t)):
         pt.track_edges(t[i], data[i,:], mask[i,:])
     pt.stop_tracking_all()
