@@ -1,6 +1,6 @@
 import numpy as np
-from wave_tools import moving_average, surface_core, fft_interface, dispersionRelation
-from help_tools import plotting_interface, polar_coordinates, convolutional_filters
+from wave_tools import surface_core, fft_interface, dispersionRelation
+from help_tools import plotting_interface, polar_coordinates, convolutional_filters, moving_average
 from radar_tools import dispersion_filter, filter_core
 import functools
 import operator
