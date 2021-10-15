@@ -1040,7 +1040,21 @@ class spacetempSurface(object):
     def copy2newgrid(self, name, new_grid):
         return spacetempSurface(name, self.eta.copy(), new_grid)
 
-    def get_local_incidence_surface(self, H, approx=False):
+    def get_local_incidence_surface(self, name, H, approx=False):
+        deta_dx = self.get_deta_dx()
+        r = np.abs(self.x)        
+        if approx:
+            n_norm = 1
+            b_norm = r
+            cos_theta_l = (self.x*deta_dx  )/(n_norm*b_norm)
+        else:
+            n_norm = np.sqrt(deta_dx**2 + 1)
+            b_norm = np.sqrt(r**2 + (H-self.eta)**2)
+            cos_theta_l = (self.x*deta_dx + (H-self.eta))/(n_norm*b_norm)
+        theta_l = np.arccos(cos_theta_l)
+        return spacetempSurface(name, theta_l, self.grid)
+
+    def get_local_incidence(self, H, approx=False):
         deta_dx = self.get_deta_dx()
         r = np.abs(self.x)        
         if approx:
@@ -1102,11 +1116,11 @@ class spacetempSurface(object):
 
     def get_illumination_function(self, H):
         # Assuming that spatial dimension is along the radar beam
-        r = np.outer(np.abs(self.x), np.ones(self.Nt))
+        r = np.outer(np.ones(self.Nt), np.abs(self.x))
         radar_point_angle = np.arctan2(r, (H - self.eta))        
         illumination = np.ones(r.shape)
         for i in range(0,self.Nx-1): 
-            illumination[i+1:,:] *= radar_point_angle[i,:] < radar_point_angle[i+1:,:] 
+            illumination[:,i+1:] *= np.outer(radar_point_angle[:,i], np.ones(self.Nx-i-1)) < radar_point_angle[:,i+1:] 
         return illumination 
 
     def get_surf_at_index(self, time_index):

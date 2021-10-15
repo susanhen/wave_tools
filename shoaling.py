@@ -260,7 +260,7 @@ class SpectralRealization:
         # man könnte auch einfach auf dem kart. System arbeiten (uniform) und dann nur die richtigen as dran multiplizieren. Dann bräuchte man vorher sicher auch die integrale nicht?
         # natürlich könnte man auch einfach zu Polarkoordinaten transferieren
         #man braucht auch noch ein omega-grid... wie kann man dann da die echten omega dranmachen?
-        #zeta = np.dot(A_cart, np.outer(np.cos(w*t[i]-kx_mesh*)))
+        #eta = np.dot(A_cart, np.outer(np.cos(w*t[i]-kx_mesh*)))
         # TODO different option for bathymetry or const depth
         Nx = len(x)
         Ny = len(y)
@@ -277,7 +277,7 @@ class SpectralRealization:
         else:
             H = h
         
-        zeta = np.zeros((Nx, Ny))
+        eta = np.zeros((Nx, Ny))
         #phase = np.random.uniform(size=self.N_f)*np.pi*2
         print('before loop')
         for i in range(0, self.N_f):
@@ -289,22 +289,22 @@ class SpectralRealization:
                 Cgx =  w[i,j]/(2*k[i,:,:] * (1+k2H_by_sinh_2kH))*(np.cos(thetaxy))
                 Cg0x = w[i,j]/(2*k[i,-1,-1] * (1+k2H_by_sinh_2kH[-1,-1]))*(np.cos(theta[i,j]))
                 phase = np.random.uniform()*np.pi*2
-                zeta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase+w[i, j]*ti-k[i,-1,-1]*np.sin(theta[i,j])*X
+                eta += self.a[i,j]* np.abs(SM.sqrt(Cg0x/Cgx))*np.cos(phase+w[i, j]*ti-k[i,-1,-1]*np.sin(theta[i,j])*X
                 +np.outer(np.ones(Nx), ksh))
         if plot_it:
-            plotting_interface.plot_3d_as_2d(x, y, zeta)
+            plotting_interface.plot_3d_as_2d(x, y, eta)
             plt.colorbar()
             plt.xlabel('$x~[\mathrm{m}]$')
             plt.ylabel('$y~[\mathrm{m}]$')
             plt.figure()
-            plt.plot(x, zeta[:,150])
+            plt.plot(x, eta[:,150])
             plt.xlabel('$x~[\mathrm{m}]$')
             plt.ylabel('$\eta~[\mathrm{m}]$')
             plt.figure()
-            plt.plot(y, zeta[400,:])
+            plt.plot(y, eta[400,:])
             plt.xlabel('$y~[\mathrm{m}]$')
             plt.ylabel('$\eta~[\mathrm{m}]$')
-        return zeta
+        return eta
                 
 
     
@@ -339,7 +339,7 @@ if __name__=='__main__':
     print('Bathymetry defined')
     #b.plot1d()
     #b.plot2d()
-    zeta = realization.invert(b, 0, x, y, plot_it=True)    
+    eta = realization.invert(b, 0, x, y, plot_it=True)    
     
     plt.show()
     

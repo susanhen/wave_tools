@@ -352,13 +352,13 @@ class PeakTracker:
         return self.peaks
 
     def get_ids_long_peaks(self):
-        return self.ids_long_peaks
+        return np.array(self.ids_long_peaks).flatten()
 
     def get_ids_high_peaks(self):
-        return self.ids_high_peaks
+        return np.array(self.ids_high_peaks).flatten()
 
     def get_ids_breaking_peaks(self):
-        return self.ids_breaking_peaks
+        return np.array(self.ids_breaking_peaks).flatten()
 
     def get_specific_tracks(self, id_list_of_interest):
         x_list = []
@@ -398,6 +398,100 @@ class PeakTracker:
 
     def plot_breaking_tracks(self, ax=None):
         self.plot_specific_tracks(self.ids_breaking_peaks, ax)
+        
+    def plot_evolution_of_specific_tracks(self, data, id_list_of_interest, N=None, x_extent=70, dt_plot=1.0, ax_list=None, cm_name='Blues'):
+        '''
+        Plots the evolution of specific tracks
+        
+        Parameters:
+        ----------
+                    input
+                            data                    2d array
+                                                    data to be plotted
+                            id_list_of_interest     list
+                                                    edge ids to be plotted (one figure for each)
+                            N                       int/None
+                                                    if not None: limits the edges plotted from the given list to the provided number
+                            x_extent         float
+                                                    extent of surrounding to be plotted around edge, default:70
+                            dt_plot                 float
+                                                    step size for plotting in time, default: 1
+                            ax_list                 list
+                                                    list of axis, one for each of the ids that should be plotted
+                            cm_name                 string
+                                                    colormap name, default: 'Blues'
+                    output
+                            out_ax_list             list
+                                                    list of axis of plots
+        '''
+        if N is None or N>len(id_list_of_interest):
+            N=len(id_list_of_interest)
+        out_ax_list = []
+        for i in range(0, N):
+            this_peak = self.peaks[id_list_of_interest[i]]
+            if ax_list is None:
+                ax = None
+            else:
+                ax = ax_list[i]
+            ax = this_peak.plot_track(self.x, self.t, data, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
+            out_ax_list.append(ax)
+        return out_ax_list
+
+
+    def plot_evolution_of_breaking_tracks(self, data, id_list_of_interest=None, N=None, x_extent=70, ax_list=None, cm_name='Blues', dt_plot=1):
+        if id_list_of_interest is None:
+            id_list_of_interest = self.ids_breaking_tracks
+        else:
+            id_list_of_interest = np.array(self.ids_breaking_edges)[id_list_of_interest]
+        return self.plot_evolution_of_specific_tracks(data, id_list_of_interest, N=N, x_extent=x_extent, ax_list=ax_list, cm_name=cm_name, dt_plot=dt_plot)
+
+    def plot_specific_tracks_and_mark_breaking(self, data, mask, id_list_of_interest, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None):
+        '''
+        Plots the evolution of specific tracks
+        
+        Parameters:
+        ----------
+                    input
+                            data                    2d array
+                                                    data to be plotted
+                            mask                    2d array
+                                                    data to be plotted
+                            id_list_of_interest     list
+                                                    edge ids to be plotted (one figure for each)
+                            N                       int/None
+                                                    if not None: limits the edges plotted from the given list to the provided number
+                            x_extent         float
+                                                    extent of surrounding to be plotted around edge, default: 70
+                            dt_plot                 float
+                                                    step size for plotting in time, default: 1
+                            cm_name                 string
+                                                    colormap name, default: 'Blues'
+                            ax_list                 list
+                                                    list of axis, one for each of the ids that should be plotted
+                    output
+                            out_ax_list             list
+                                                    list of axis of plots
+        '''
+        if N is None or N>len(id_list_of_interest):
+            N=len(id_list_of_interest)
+        out_ax_list = []
+        for i in range(0, N):
+            this_edge = self.edges[id_list_of_interest[i]]
+            if ax_list is None:
+                ax = None
+            else:
+                ax = ax_list[i]
+            ax = this_edge.plot_track_and_mark_breaking(self.x, self.t, data, mask, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
+            out_ax_list.append(ax)
+        return out_ax_list
+
+    def plot_breaking_tracks_and_mark_breaking(self, data, mask, id_list_of_interest=None, N=None, x_extent=70, dt_plot=1.):
+        if id_list_of_interest ==None:
+            ids = self.ids_breaking_edges
+        else:
+            ids = np.array(self.ids_breaking_edges)[id_list_of_interest]
+        return self.plot_specific_tracks_and_mark_breaking(data, mask, ids, N, x_extent=x_extent, dt_plot=dt_plot)            
+
 
 
 

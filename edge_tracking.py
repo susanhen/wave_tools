@@ -3,6 +3,9 @@ from wave_tools import find_peaks, fft_interface, grouping
 from help_tools import plotting_interface, convolutional_filters
 import matplotlib.pyplot as plt
 
+from skimage.feature import canny
+from skimage.filters import gaussian
+
 def get_common_indices(index_list1, index_list2):
     list1_set = set(index_list1)
     return list(list1_set.intersection(index_list2))
@@ -54,7 +57,7 @@ class Edge:
         self.x_len = 0
         self.data_max = np.max(self.data)
         if len(self.x)>1:
-            self.x_len = self.x[-1] - self.x[0]
+            self.x_len = np.max(self.x) - np.min(self.x)
         return self.x_len, self.data_max
         
 
@@ -149,15 +152,15 @@ class Edge:
             ax.plot(x[start_ind:end_ind+1], data[t_ind[i], start_ind:end_ind+1], color=colors[i])
             # If there is breaking happening in this time step in the observed interval
             if sum(mask[t_ind[i], start_ind:end_ind+1])>0:
-                first_breaking_ind = start_ind + np.argwhere(mask[t_ind[i], start_ind:end_ind+1]==1)#[-1]
-                ax.plot(x[first_breaking_ind], data[t_ind[i], first_breaking_ind], 'rx')#, color=colors[i])
+                #first_breaking_ind = start_ind + np.argwhere(mask[t_ind[i], start_ind:end_ind+1]==1)#[-1]
+                ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'rx')#, color=colors[i])
         return ax
 
 
 
 
 class EdgeTracker:
-    def __init__(self, x, t, data0, max_edge_dist, mask0=None, cmax=10.0, high_edge_thresh=3.0, long_edge_thresh=300):
+    def __init__(self, x, t, data0, max_edge_dist, mask0=None, cmax=10.0, high_edge_thresh=3.0, long_edge_thresh=200):
         self.x = x
         self.t = t
         self.Nx = len(x)
@@ -255,6 +258,11 @@ class EdgeTracker:
         else:
             self.ids_non_breaking_edges.append(edge_ID)
 
+    def plot_image_with_track(self, data, edgeID):
+        ax = plotting_interface.plot_surf_time_range(self.t, self.x, data)
+        self.plot_specific_tracks([edgeID], ax=ax)
+        return ax
+
     def stop_tracking_all(self):
         for edge_ID in self.active_edges.keys():
             self.stop_tracking(edge_ID)
@@ -322,7 +330,7 @@ class EdgeTracker:
     def plot_breaking_tracks(self, ax=None):
         self.plot_specific_tracks(self.ids_breaking_edges, ax)
 
-    def plot_evolution_of_specific_tracks(self, data, id_list_of_interest, N=None, x_extent=70, dt_plot=1.0, ax_list=None, cm_name='Blues'):
+    def plot_evolution_of_specific_tracks(self, data, id_list_of_interest, N=None, x_extent=70, dt_plot=1.0, ax_list=None, cm_name='Blues', show_tracks=False):
         '''
         Plots the evolution of specific tracks
         
@@ -343,6 +351,8 @@ class EdgeTracker:
                                                     list of axis, one for each of the ids that should be plotted
                             cm_name                 string
                                                     colormap name, default: 'Blues'
+                            show_tracks             bool
+                                                    for each id of interest plot data with given track, default:false
                     output
                             out_ax_list             list
                                                     list of axis of plots
@@ -356,19 +366,23 @@ class EdgeTracker:
                 ax = None
             else:
                 ax = ax_list[i]
-            ax = this_edge.plot_track(self.x, self.t, data, x_extent=x_extent, dt_plot=1., cm_name=cm_name, ax=ax)
+            if show_tracks:
+                ax_tracks = self.plot_image_with_track(data, id_list_of_interest[i])
+                ax_tracks.set_title('ID {0:d}'.format(id_list_of_interest[i]))
+                
+            ax = this_edge.plot_track(self.x, self.t, data, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
             out_ax_list.append(ax)
         return out_ax_list
 
 
-    def plot_evolution_of_breaking_tracks(self, data, id_list_of_interest=None, N=None, x_extent=70, ax_list=None, cm_name='Blues', dt_plot=1):
+    def plot_evolution_of_breaking_tracks(self, data, id_list_of_interest=None, N=None, x_extent=70, ax_list=None, cm_name='Blues', dt_plot=1, show_tracks=False):
         if id_list_of_interest is None:
             id_list_of_interest = self.ids_breaking_edges
         else:
             id_list_of_interest = np.array(self.ids_breaking_edges)[id_list_of_interest]
-        return self.plot_evolution_of_specific_tracks(data, id_list_of_interest, N=N, x_extent=x_extent, ax_list=ax_list, cm_name=cm_name, dt_plot=dt_plot)
+        return self.plot_evolution_of_specific_tracks(data, id_list_of_interest, N=N, x_extent=x_extent, ax_list=ax_list, cm_name=cm_name, dt_plot=dt_plot, show_tracks=show_tracks)
 
-    def plot_specific_tracks_and_mark_breaking(self, data, mask, id_list_of_interest, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None):
+    def plot_specific_tracks_and_mark_breaking(self, data, mask, id_list_of_interest=None, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None, show_tracks=False):
         '''
         Plots the evolution of specific tracks
         
@@ -380,7 +394,7 @@ class EdgeTracker:
                             mask                    2d array
                                                     data to be plotted
                             id_list_of_interest     list
-                                                    edge ids to be plotted (one figure for each)
+                                                    edge ids to be plotted (one figure for each), default: None (=all breaking tracks)
                             N                       int/None
                                                     if not None: limits the edges plotted from the given list to the provided number
                             x_extent         float
@@ -395,6 +409,8 @@ class EdgeTracker:
                             out_ax_list             list
                                                     list of axis of plots
         '''
+        if id_list_of_interest is None:
+            id_list_of_interest = self.ids_breaking_edges
         if N is None or N>len(id_list_of_interest):
             N=len(id_list_of_interest)
         out_ax_list = []
@@ -404,6 +420,9 @@ class EdgeTracker:
                 ax = None
             else:
                 ax = ax_list[i]
+            if show_tracks:
+                ax_tracks = self.plot_image_with_track(data, id_list_of_interest[i])
+                ax_tracks.set_title('ID {0:d}'.format(id_list_of_interest[i]))
             ax = this_edge.plot_track_and_mark_breaking(self.x, self.t, data, mask, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
             out_ax_list.append(ax)
         return out_ax_list
@@ -439,9 +458,9 @@ def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True)
                         switch for preprocessing inputdata
     '''
     if filter_input:
-        input = (convolutional_filters.apply_Gaussian_blur(data))
+        #input = (convolutional_filters.apply_Gaussian_blur(data))
+        input = gaussian(data, sigma=1.0)
         data = np.gradient(convolutional_filters.apply_edge_detection(input), axis=1)
-
     pt = EdgeTracker(x, t, data[0,:], max_edge_dist, mask0=mask[0,:], cmax=cmax)
     for i in range(1, len(t)):
         pt.track_edges(t[i], data[i,:], mask[i,:])
