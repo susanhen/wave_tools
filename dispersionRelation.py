@@ -1,5 +1,5 @@
 import numpy as np
-from skimage import measure
+#from skimage import measure
 import scipy.interpolate
 from scipy.optimize import minimize
 from scipy.interpolate import interp1d
