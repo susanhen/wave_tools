@@ -1,11 +1,12 @@
 import numpy as np
-from wave_tools import find_peaks, find_freak_waves, fft_interface, SpectralAnalysis, fft_interpolate, peak_tracking
+from wave_tools import find_peaks, find_freak_waves, fft_interface, fft_interpolate, peak_tracking
+#from wave_tools import SpectralAnalysis
 import matplotlib.pyplot as plt
 from help_tools import plotting_interface, polar_coordinates
 import h5py
 from fractions import Fraction
 import scipy
-from mpl_toolkits.mplot3d import Axes3D
+#from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 contour_colormap = cm.coolwarm
 color_list = ['r', 'b', 'k'] #TODO make a proper one!
@@ -1019,11 +1020,11 @@ class spacetempSurface(object):
         return np.abs(self.x) 
 
     def get_deta_dx(self):
-        deta_dt, deta_dx = np.gradient(self.eta, self.t, self.x)
+        deta_dx = np.gradient(self.eta, self.x, axis=1)
         return deta_dx
 
     def get_deta_dt(self):
-        deta_dt, deta_dx = np.gradient(self.eta, self.t, self.x)
+        deta_dt = np.gradient(self.eta, self.t, axis=0)
         return deta_dt
     
     def copy(self, name):
@@ -1034,8 +1035,8 @@ class spacetempSurface(object):
 
     def replace_grid(self, new_grid):
         self.grid = new_grid
-        self.x = new_grid[0]
-        self.t = new_grid[1]
+        self.t = new_grid[0]
+        self.x = new_grid[1]
 
     def copy2newgrid(self, name, new_grid):
         return spacetempSurface(name, self.eta.copy(), new_grid)
