@@ -1,6 +1,6 @@
 import numpy as np
 from wave_tools import find_peaks, find_freak_waves, fft_interface, fft_interpolate, peak_tracking
-#from wave_tools import SpectralAnalysis
+from wave_tools import SpectralAnalysis
 import matplotlib.pyplot as plt
 from help_tools import plotting_interface, polar_coordinates
 import h5py
@@ -69,7 +69,7 @@ class _Surface1D(object):
         radar_point_angle = np.arctan2(r, (H - self.eta))        
         illumination = np.ones(r.shape)
         for i in range(0,self.N-1): 
-            illumination[i+1:,:] *= radar_point_angle[i,:] < radar_point_angle[i+1:,:] 
+            illumination[i+1:] *= radar_point_angle[i] < radar_point_angle[i+1:] 
         return illumination              
 
 
@@ -1226,3 +1226,6 @@ class spacetempSurface(object):
                     xloc -= 1
                     dis -= self.dx
         return msurf, pt
+
+    def get_peakTracker(self):
+        return peak_tracking.get_PeakTracker(self.x, self.t, self.eta, self.vel)

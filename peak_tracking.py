@@ -39,6 +39,7 @@ class Peak:
         '''
         self.is_active = True
         self.t_start = t_start
+        self.x_start = x_start
         self.dt = dt
         self.dx = dx
         self.x = [x_start]
@@ -246,7 +247,7 @@ class Peak:
         return ax
       
 class PeakTracker:
-    def __init__(self, x, t, eta0, vel0, cmax=10.0, high_peak_thresh=3.0, long_peak_thresh=300):
+    def __init__(self, x, t, eta0, vel0, cmax, high_peak_thresh=3.0, long_peak_thresh=300):
         self.x = x
         self.t = t
         self.Nx = len(x)
@@ -264,11 +265,12 @@ class PeakTracker:
         self.ids_high_peaks = []
         self.ids_long_peaks = []
         self.ids_breaking_peaks = []
+        self.ids_non_breaking_peaks = []
         self.high_peak_thresh = high_peak_thresh
         self.long_peak_thresh = long_peak_thresh
         for i in range(0, self.N_peaks):
             peak_index = peak_location_indices[i]
-            self.peaks[i] = Peak(0, self.x[peak_index], eta0[peak_index], vel0[peak_index], self.dt, self.dx)
+            self.peaks[i] = Peak(t[0], self.x[peak_index], eta0[peak_index], vel0[peak_index], self.dt, self.dx)
             self.active_peaks[i] = peak_index
 
     def breaking_tracker(self):
@@ -284,7 +286,7 @@ class PeakTracker:
                 self.pc = np.append(self.pc, self.peaks[i].cb)
         self.bindex = np.delete(self.bindex, 0, 0)
 
-    def track_peaks(self, ti, eta, vel, max_dist=5):
+    def track_peaks(self, ti, eta, vel, max_dist=30):
         '''
         find peaks for given data track peaks found
         Old paths are continued or stopped, new paths are added
@@ -300,20 +302,20 @@ class PeakTracker:
             old_peak_index = self.active_peaks[peak_ID]
             peak = self.peaks[peak_ID]
             new_peak_location_index = None
-            found = False
-            shift = 0
-            if old_peak_index >= self.N_max_steps_x:
-
-                chosen_index = np.argmin(np.abs(peak_location_indices - old_peak_index))
-                if np.abs(peak_location_indices[chosen_index] - old_peak_index) <= max_dist:
-                    new_peak_location_index = peak_location_indices[chosen_index]
-            if new_peak_location_index is None:     
-                self.stop_tracking(peak_ID)           
-                indices_to_be_removed.append(peak_ID)                    
-            else:
-                peak.track(self.x[new_peak_location_index], eta[new_peak_location_index], vel[new_peak_location_index])
-                self.active_peaks[peak_ID] = new_peak_location_index
-                peak_location_indices.pop(peak_location_indices.index(new_peak_location_index))
+            if len(peak_location_indices)>0:
+                if old_peak_index >= self.N_max_steps_x:
+                    index_difference = (old_peak_index - peak_location_indices)
+                    index_difference = np.where(index_difference<0, np.nan, index_difference)
+                    chosen_index = np.argmin(index_difference)
+                    if (old_peak_index - peak_location_indices[chosen_index]) <= max_dist:
+                        new_peak_location_index = peak_location_indices[chosen_index]
+                if new_peak_location_index is None:     
+                    self.stop_tracking(peak_ID)           
+                    indices_to_be_removed.append(peak_ID)                    
+                else:
+                    peak.track(self.x[new_peak_location_index], eta[new_peak_location_index], vel[new_peak_location_index])
+                    self.active_peaks[peak_ID] = new_peak_location_index
+                    peak_location_indices.pop(peak_location_indices.index(new_peak_location_index))
         
         for index in indices_to_be_removed:
             self.active_peaks.pop(index)
@@ -334,6 +336,8 @@ class PeakTracker:
         if peak.is_breaking():
             if peak.eta[peak.breaking_start_ind]>min_breaking_height:
                 self.ids_breaking_peaks.append(peak_ID)
+        else:
+            self.ids_non_breaking_peaks.append(peak_ID)
 
     def stop_tracking_all(self):
         for peak_ID in self.active_peaks.keys():
@@ -358,6 +362,9 @@ class PeakTracker:
         return np.array(self.ids_high_peaks).flatten()
 
     def get_ids_breaking_peaks(self):
+        return np.array(self.ids_breaking_peaks).flatten()
+
+    def get_ids_non_breaking_peaks(self):
         return np.array(self.ids_breaking_peaks).flatten()
 
     def get_specific_tracks(self, id_list_of_interest):

@@ -109,7 +109,7 @@ class Edge:
         '''
         return self.breaking
 
-    def plot_track(self, x, t, data, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
+    def plot_track(self, x, t, data, label, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
         '''
         Plots the evolution along the track and marks the edge
         '''
@@ -129,9 +129,10 @@ class Edge:
             end_ind = np.min([x_ind[i] + int(0.8*interval_size), len(x)-2])
             ax.plot(x[start_ind:end_ind+1], data[t_ind[i], start_ind:end_ind+1], color=colors[i])
             ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'x', color=colors[i])
+        ax.set_ylabel(label)
         return ax
 
-    def plot_track_and_mark_breaking(self, x, t, data, mask, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
+    def plot_track_and_mark_breaking(self, x, t, data, mask, label, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
         '''
         Plots the evolution along the track and marks where breaking occurs
         '''
@@ -154,6 +155,7 @@ class Edge:
             if sum(mask[t_ind[i], start_ind:end_ind+1])>0:
                 #first_breaking_ind = start_ind + np.argwhere(mask[t_ind[i], start_ind:end_ind+1]==1)#[-1]
                 ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'rx')#, color=colors[i])
+        ax.set_ylabel(label)
         return ax
 
 
@@ -330,7 +332,7 @@ class EdgeTracker:
     def plot_breaking_tracks(self, ax=None):
         self.plot_specific_tracks(self.ids_breaking_edges, ax)
 
-    def plot_evolution_of_specific_tracks(self, data, id_list_of_interest, N=None, x_extent=70, dt_plot=1.0, ax_list=None, cm_name='Blues', show_tracks=False):
+    def plot_evolution_of_specific_tracks(self, data, label, id_list_of_interest, N=None, x_extent=70, dt_plot=1.0, ax_list=None, cm_name='Blues', show_tracks=False):
         '''
         Plots the evolution of specific tracks
         
@@ -339,6 +341,8 @@ class EdgeTracker:
                     input
                             data                    2d array
                                                     data to be plotted
+                            label                   string
+                                                    label for y-axis
                             id_list_of_interest     list
                                                     edge ids to be plotted (one figure for each)
                             N                       int/None
@@ -370,19 +374,19 @@ class EdgeTracker:
                 ax_tracks = self.plot_image_with_track(data, id_list_of_interest[i])
                 ax_tracks.set_title('ID {0:d}'.format(id_list_of_interest[i]))
                 
-            ax = this_edge.plot_track(self.x, self.t, data, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
+            ax = this_edge.plot_track(self.x, self.t, data, label, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
             out_ax_list.append(ax)
         return out_ax_list
 
 
-    def plot_evolution_of_breaking_tracks(self, data, id_list_of_interest=None, N=None, x_extent=70, ax_list=None, cm_name='Blues', dt_plot=1, show_tracks=False):
+    def plot_evolution_of_breaking_tracks(self, data, label, id_list_of_interest=None, N=None, x_extent=70, ax_list=None, cm_name='Blues', dt_plot=1, show_tracks=False):
         if id_list_of_interest is None:
             id_list_of_interest = self.ids_breaking_edges
         else:
             id_list_of_interest = np.array(self.ids_breaking_edges)[id_list_of_interest]
-        return self.plot_evolution_of_specific_tracks(data, id_list_of_interest, N=N, x_extent=x_extent, ax_list=ax_list, cm_name=cm_name, dt_plot=dt_plot, show_tracks=show_tracks)
+        return self.plot_evolution_of_specific_tracks(data, label, id_list_of_interest, N=N, x_extent=x_extent, ax_list=ax_list, cm_name=cm_name, dt_plot=dt_plot, show_tracks=show_tracks)
 
-    def plot_specific_tracks_and_mark_breaking(self, data, mask, id_list_of_interest=None, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None, show_tracks=False):
+    def plot_specific_tracks_and_mark_breaking(self, data, mask, label, id_list_of_interest=None, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None, show_tracks=False):
         '''
         Plots the evolution of specific tracks
         
@@ -393,6 +397,8 @@ class EdgeTracker:
                                                     data to be plotted
                             mask                    2d array
                                                     data to be plotted
+                            label                   string
+                                                    label for y-axis
                             id_list_of_interest     list
                                                     edge ids to be plotted (one figure for each), default: None (=all breaking tracks)
                             N                       int/None
@@ -423,16 +429,16 @@ class EdgeTracker:
             if show_tracks:
                 ax_tracks = self.plot_image_with_track(data, id_list_of_interest[i])
                 ax_tracks.set_title('ID {0:d}'.format(id_list_of_interest[i]))
-            ax = this_edge.plot_track_and_mark_breaking(self.x, self.t, data, mask, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
+            ax = this_edge.plot_track_and_mark_breaking(self.x, self.t, data, mask, label, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
             out_ax_list.append(ax)
         return out_ax_list
 
-    def plot_breaking_tracks_and_mark_breaking(self, data, mask, id_list_of_interest=None, N=None, x_extent=70, dt_plot=1.):
+    def plot_breaking_tracks_and_mark_breaking(self, data, mask, label, id_list_of_interest=None, N=None, x_extent=70, dt_plot=1.):
         if id_list_of_interest ==None:
             ids = self.ids_breaking_edges
         else:
             ids = np.array(self.ids_breaking_edges)[id_list_of_interest]
-        return self.plot_specific_tracks_and_mark_breaking(data, mask, ids, N, x_extent=x_extent, dt_plot=dt_plot)            
+        return self.plot_specific_tracks_and_mark_breaking(data, mask, label, ids, N, x_extent=x_extent, dt_plot=dt_plot)            
 
 
 def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True):
