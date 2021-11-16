@@ -19,14 +19,14 @@ def k2grid(k):
 def _physical2spectral1d(data, grid):
     k, dk = grid2k(grid)    
     N = len(data)
-    fft_data = np.fft.fftshift(np.fft.rfft(data))/np.sqrt(dk)/N
+    fft_data = np.fft.fftshift(np.fft.fft(data))/np.sqrt(dk)/N
     return k, fft_data
     
 def _physical2spectral2d(data, grid):
     kx, dkx = grid2k(grid[0])
     ky, dky = grid2k(grid[1])
     Nx, Ny = data.shape
-    fft_data = np.fft.fftshift(np.fft.rfft2(data))/np.sqrt(dkx*dky)/(Nx*Ny)
+    fft_data = np.fft.fftshift(np.fft.fft2(data))/np.sqrt(dkx*dky)/(Nx*Ny)
     return kx, ky, fft_data
 
 def _physical2spectral3d(data, grid):
@@ -34,7 +34,7 @@ def _physical2spectral3d(data, grid):
     ky, dky = grid2k(grid[1])
     kz, dkz = grid2k(grid[2])
     Nx, Ny, Nz = data.shape
-    fft_data = np.fft.fftshift(np.fft.rfftn(data))/np.sqrt(dkx*dky*dkz)/(Nx*Ny*Nz)
+    fft_data = np.fft.fftshift(np.fft.fftn(data))/np.sqrt(dkx*dky*dkz)/(Nx*Ny*Nz)
     return kx, ky, kz, fft_data
     
 
