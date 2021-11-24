@@ -441,7 +441,7 @@ class EdgeTracker:
         return self.plot_specific_tracks_and_mark_breaking(data, mask, label, ids, N, x_extent=x_extent, dt_plot=dt_plot)            
 
 
-def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True):
+def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True, high_edge_thresh=3.0, long_edge_thresh=200):
     '''
     Creates and instance of edge Tracker and tracks all edges and returns the instance
 
@@ -467,7 +467,7 @@ def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True)
         #input = (convolutional_filters.apply_Gaussian_blur(data))
         input = gaussian(data, sigma=1.0)
         data = np.gradient(convolutional_filters.apply_edge_detection(input), axis=1)
-    pt = EdgeTracker(x, t, data[0,:], max_edge_dist, mask0=mask[0,:], cmax=cmax)
+    pt = EdgeTracker(x, t, data[0,:], max_edge_dist, mask0=mask[0,:], cmax=cmax, high_edge_thresh=high_edge_thresh, long_edge_thresh=long_edge_thresh)
     for i in range(1, len(t)):
         pt.track_edges(t[i], data[i,:], mask[i,:])
     pt.stop_tracking_all()
