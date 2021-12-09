@@ -1,10 +1,10 @@
 import numpy as np
 from wave_tools import fft_interface
 from scipy.special import gammaln
-import polarTransform
     
 
 def mitsuyatsu_spreading_old(spec1d, theta_mean, smax, wp, k, h=1000, N_theta=360):
+    import polarTransform # no longer present!!
     '''
     Defines a spectral spreading matrix according to mitsuyatsu
     

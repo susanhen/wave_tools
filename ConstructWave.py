@@ -233,6 +233,7 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     surf = surface_core.Surface('jonswap', eta, [t, x, y]) 
     if save_alongside:
         hf.close()
+        Tp = 2*np.pi/(np.sqrt(kp*9.81*np.tanh(kp*h))) # without currents
         surf.add_wave_parameters_to_file(fn, Hs, Tp, gamma, theta_mean, smax, h)
     return surf
 
