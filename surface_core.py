@@ -269,7 +269,7 @@ class _Surface2D(object):
             plt.plot(eta_pol[:,240])
             plt.show()
         x, y, illu_cart = polar_coordinates.pol2cart(r, theta, illu_pol, x_out=self.x, y_out=self.y)
-        plotting_interface.plot_3d_as_2d(x, y, illu_cart)
+        #plotting_interface.plot_3d_as_2d(x, y, illu_cart)
         illu_cart = illu_cart.round().astype(int) # TODO make this part of the polar_coordinates?      
                
         return illu_cart
@@ -344,14 +344,14 @@ class _Surface3D(object):
     def get_local_incidence_angle(self, H, approx=False):
         theta_l = np.zeros(self.eta.shape)
         for i in range(0, len(self.t)):
-            surf2d = self.get_surf2d_at_index(i, '')
+            surf2d = self.get_surf2d_at_index(i)
             theta_l[i,:,:] = surf2d.get_local_incidence_angle(H, approx)
         return theta_l
 
     def get_illumination_function(self, H):
         illumination = np.zeros(self.eta.shape)
         for i in range(0, self.Nt):
-            surf2d = self.get_surf2d_at_index(i, '')
+            surf2d = self.get_surf2d_at_index(i)
             illumination[i,:,:] = surf2d.get_illumination_function(H)
         return illumination
 
@@ -771,10 +771,10 @@ class Surface(object):
         hf.create_dataset('psi', data=psi)
         hf.close()
 
-    def add_wave_parameters_to_file(self, fn, Hs, lambda_p, gamma, theta_mean, smax, h):
+    def add_wave_parameters_to_file(self, fn, Hs, Tp, gamma, theta_mean, smax, h):
         hf = h5py.File(fn, 'a')
         hf.attrs['Hs'] = Hs
-        hf.attrs['lambda_p'] = lambda_p
+        hf.attrs['Tp'] = Tp
         hf.attrs['gamma'] = gamma
         hf.attrs['theta_mean'] = theta_mean
         hf.attrs['smax'] = smax
@@ -859,20 +859,27 @@ def current_from_file(fn):
     hf = h5py.File(fn, 'r')
     z = np.array(hf.get('z'))
     U = np.array(hf.get('U'))
-    psi = np.array(hf.get('psi')) + 0 #+0 to convert possible float
+    psi = hf.attrs['psi']
     hf.close()
     return z, U, psi
+
+def effective_current_from_file(fn):
+    hf = h5py.File(fn, 'r')
+    k = np.array(hf.get('k'))
+    Uk = np.array(hf.get('Uk'))
+    hf.close()
+    return k, Uk
 
 def wave_parameters_from_file(fn):
     hf = h5py.File(fn, 'r')
     Hs = hf.attrs['Hs']
-    lambda_p = hf.attrs['lambda_p']
+    Tp = hf.attrs['Tp']
     gamma = hf.attrs['gamma']
     theta_mean = hf.attrs['theta_mean']
     smax = hf.attrs['smax']
     h = hf.attrs['h']
     hf.close()
-    return Hs, lambda_p, gamma, theta_mean, smax, h
+    return Hs, Tp, gamma, theta_mean, smax, h
 
         
 def plot_surfaces2d(list_of_surfaces, xi, yi, y_sub=None, x_sub=None):

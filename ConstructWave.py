@@ -116,8 +116,8 @@ def JonswapWave2D(x, y, Hs, Alpha, gamma, theta_mean, smax):
     Nk = len(k)
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
-    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
-    D = spreading.mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax)
+    S = jonswap.jonswap_k(k, kp, Hs, gamma)
+    D = spreading.mitsuyatsu_spreading(k, kp, theta, theta_mean, smax)
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
@@ -141,7 +141,7 @@ def JonswapWave2D_asymetric(x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h=1000
     Nk = len(k)
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
-    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
+    S = jonswap.jonswap_k(k, kp, Hs, gamma)
     D = spreading.asymmetric_spreading(k, kp, theta, theta_mean, smax, mu)
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
@@ -167,8 +167,8 @@ def JonswapWave3D(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
     Nk = len(k)
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
-    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
-    D = spreading.mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax)
+    S = jonswap.jonswap_k(k, kp, Hs, gamma)
+    D = spreading.mitsuyatsu_spreading(k, kp, theta, theta_mean, smax)
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
@@ -183,7 +183,7 @@ def JonswapWave3D(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
         eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
     return surface_core.Surface('jonswap', eta, [t, x, y]) 
 
-def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, U, psi, save_alongside=False, fn='dummy.hdmf'):
+def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, U, psi, save_alongside=True, fn='dummy.hdmf'):
     g = 9.81
     Nt = len(t)
     Nx = len(x)
@@ -195,8 +195,8 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     Nk = len(k)
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
-    S = jonswap.jonswap_k_pavel(k, kp, Hs, gamma)
-    D = spreading.mitsuyatsu_spreading_pavel(k, kp, theta, theta_mean, smax)
+    S = jonswap.jonswap_k(k, kp, Hs, gamma)
+    D = spreading.mitsuyatsu_spreading(k, kp, theta, theta_mean, smax)
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
@@ -216,18 +216,25 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
         hf.create_dataset('t', data=t)
         hf.create_dataset('x', data=x)
         hf.create_dataset('y', data=y)
+        hf.create_dataset('z', data=z)
+        hf.create_dataset('U', data=U)
+        hf.create_dataset('k', data=k)
+        hf.create_dataset('Uk', data=Uk)
         hf.attrs['window_applied'] = False 
         hf.attrs['name'] = 'shearCurrent'
         hf.attrs['ND'] = 3
+        hf.attrs['psi'] = psi
         eta_dset = hf.create_dataset('eta', eta.shape)
     for i in range(0, Nt):
         phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten()) - np.outer(t[i]*ww, np.ones(Nx*Ny))
         eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
         if save_alongside:
             eta_dset[i,:,:] = eta[i,:,:]
+    surf = surface_core.Surface('jonswap', eta, [t, x, y]) 
     if save_alongside:
         hf.close()
-    return surface_core.Surface('jonswap', eta, [t, x, y]) 
+        surf.add_wave_parameters_to_file(fn, Hs, Tp, gamma, theta_mean, smax, h)
+    return surf
 
 def JonswapWave3D_asymetric(t, x, y, Hs, Alpha, gamma, theta_mean, smax, mu, h=1000):
     g = 9.81
@@ -265,11 +272,11 @@ class DirectionalSpectrum:
         self.theta_p = theta_p
         self.gam = gam
         g = 9.81        
-        U = lambda UU: 3.5*(g/UU)*(g/UU**2*F)**(-0.33)-fp
+        U = lambda UU: 3.5*(g/UU)*(g/UU**2*F)**(-0.33)-self.fp
         self.U10 = fsolve(U, 10,  xtol=1e-04)[0]
         self.xxn = g/self.U10**2*F
         self.S = lambda f:(0.076*self.xxn**(-0.22)*g**2/(2*np.pi)**4*(f)**(-5)*np.exp(-5/4*(self.fp/f)**4)
-         *gam**np.exp(-((f-self.fp)**2)/(2*(fp*(0.07*(1/2 + 1/2*np.sign(self.fp - f))
+         *gam**np.exp(-((f-self.fp)**2)/(2*(self.fp*(0.07*(1/2 + 1/2*np.sign(self.fp - f))
         +0.09*(1/2 -1/2*np.sign(self.fp - f))))**2)))
                 
         self.s = lambda f:((c*(2*np.pi*self.fp*self.U10/g)**(-2.5)*(f/self.fp)**5)*(1/2 + 1/2*np.sign(self.fp - f)) +
@@ -459,7 +466,6 @@ def shoaling_case(surf_name='shoaling_surface', save=False):
     Ny = len(y)
     g = 9.81
     Tp = 10
-    fp = 1./Tp
     theta_p = -5*np.pi/180
     gam = 3.3
     N_f = 100
@@ -482,7 +488,9 @@ def shoaling_case(surf_name='shoaling_surface', save=False):
         eta[i,:,:] = realization.invert(b, t[i], x, y)    
     surf = surface_core.Surface(surf_name, eta, [t, x,y])
     if save:
-        surf.save('../../Data/SimulatedWaves/shoaling_windsea_res{0:1.1f}_dt{1:1.1f}_T{2:d}_U0_surf3d.hdf5'.format(dx, dt, T))
+        fn = '../../Data/SimulatedWaves/shoaling_windsea_res{0:1.1f}_dt{1:1.1f}_T{2:d}_U0_surf3d.hdf5'.format(dx, dt, T)
+        surf.save(fn)
+        surf.add_wave_parameters_to_file(fn, Hs, Tp, gamma, theta_mean, smax, h)
     return surf
 
 def shoaling_1D(dx, t, Tp, N_f, surfname = 'surfprofile',
@@ -564,6 +572,7 @@ if __name__=='__main__':
 
     inverted_surface = realization.invert(0, x, y, h)
     inverted_surface.save('../../Data/SimulatedWaves/inv_surf.hdf5')
+    inverted_surface.add_wave_parameters_to_file(fn, Hs, Tp, gamma, theta_mean, smax, h)
     
     plt.show()
     '''
@@ -579,21 +588,23 @@ if __name__=='__main__':
     '''
 
     #JONSWAP 3D similar JONSWAP2D
-    '''
+    #'''
     dx = 7.5
     dy = 7.5
     dt = 1.
     h = 1000
-    t = np.arange(0, 5, dt)
+    T = 20*60
+    t = np.arange(0, T, dt)
     x = np.arange(-250, 250, dx)
     y = np.arange(500, 1000, dy)
     #surf3d = JonswapWave3D(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h)
     z = np.linspace(-100,0,100)
-    Ux = 0.5*np.exp(5*z)
-    Uy = 0
-    surf3d = JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, Ux, Uy)
-    surf3d.plot_3d_as_2d(0)
-    '''
+    U = np.exp(0.5*z) + 0.05
+    psi = 0
+    fn = '../../Data/SimulatedWaves/shearing_curr_res_{0:1.1f}_dt_{1:1.1f}_T_{2:d}_U_exp(0.5z)+0.05_surf3d.hdf5'.format(dx, dt, T)
+    surf3d = JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, U, psi, fn=fn)
+    #surf3d.plot_3d_as_2d(0)
+    #'''
 
     # asymmetric Jonswap
     '''
@@ -608,7 +619,7 @@ if __name__=='__main__':
     '''
 
     # shoaling JONSWAP 1D
-    shoaling_1D(dx, t, Tp, N_f)
+    #shoaling_1D(dx, t, Tp, N_f)
 
     plt.show()
 

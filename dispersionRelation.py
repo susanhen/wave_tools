@@ -44,7 +44,7 @@ def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)):
 
 def calc_wavenumber(w, h, Ueff, psi, Ntheta, Niter_max=200, eps=10**(-6)): 
     '''
-    calculaate the wave number for the provided angular frequency or frequencies for the given effective current
+    calculate the wave number for the provided angular frequency or frequencies for the given effective current
     and the angle of the current psi.
 
     Parameters
@@ -116,6 +116,23 @@ def get_U_eff_at(k, z, U):
 
     
 def get_dispersion_cone_at(at_w, h, z, U, psi, extent=None, polar=False):
+    '''
+    Return slice of dispersion cone for a provided shear current
+
+    Parameters:
+    -----------
+    input
+            at_w    float
+                    frequency at which the cone slices should be given
+            h       float
+                    waterdepth
+            z       array
+                    depth coordinates with velocity profile
+            U       array
+                    strength of the current for z
+            psi     float
+                    angle of current in rad
+    '''
     CS = plotting_interface.plot_disp_rel_at(at_w, h, z, U, psi, 'w', extent=extent)    
     kx_theor, ky_theor = CS.collections[0].get_paths()[0].vertices.T
     k_theor = np.sqrt(kx_theor**2 + ky_theor**2)

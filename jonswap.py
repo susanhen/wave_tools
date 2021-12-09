@@ -30,7 +30,7 @@ def jonswap(w, wp, Hs, gamma=3.3, w_cut=None):
     jonny = np.where(w<w_cut, jonny, 0)
     return jonny
     
-def jonswap_k(k, wp, Hs, h, gamma=3.3, k_cut=None):  
+def jonswap_k_old(k, wp, Hs, h, gamma=3.3, k_cut=None):  
     '''
     Evalutesthe 1d jonswap spectrum for a given wave number vector; only positive k
     Parameters:
@@ -62,7 +62,7 @@ def jonswap_k(k, wp, Hs, h, gamma=3.3, k_cut=None):
     jonny[0] = 0
     return jonny
 
-def jonswap_k_pavel(k, kp, Hs, gamma):
+def jonswap_k(k, kp, Hs, gamma):
     if k[0] == 0:
         kk = k[1:]
     else:
