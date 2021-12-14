@@ -72,7 +72,7 @@ class Peak:
             self.x_len = self.x[-1] - self.x[0]
             self.c = np.gradient(self.x, self.dt)
             if self.ignore_c0:
-                self.Bx = np.where(self.c==0, 0, self.vel/self.c)
+                self.Bx = np.where(self.c==0, 0, np.abs(self.vel/self.c))
             else:
                 # Bx is only defined from the second point, set to 0 in the first point where c is not known (0)
                 self.Bx = np.block([0, np.abs(self.vel[1:]/self.c[1:])])
