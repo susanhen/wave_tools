@@ -256,7 +256,7 @@ class PeakTracker:
         self.dx = x[1] - x[0]
         self.N_max_steps_x = int(cmax/self.dt) + 1
         self.max_index_tracked = self.Nx - self.N_max_steps_x
-        self.method = 'all_peaks'
+        self.method = 'zero_crossing'
         peak_location_indices = list(find_peaks.find_peaks(eta0, method=self.method))
         self.peak_location_collector = [peak_location_indices]
         self.N_peaks = len(peak_location_indices)
@@ -286,7 +286,7 @@ class PeakTracker:
                 self.pc = np.append(self.pc, self.peaks[i].cb)
         self.bindex = np.delete(self.bindex, 0, 0)
 
-    def track_peaks(self, ti, eta, vel, max_dist=30):
+    def track_peaks(self, ti, eta, vel, max_dist=30, plot_each_iteration=False):
         '''
         find peaks for given data track peaks found
         Old paths are continued or stopped, new paths are added
@@ -305,10 +305,27 @@ class PeakTracker:
             if len(peak_location_indices)>0:
                 if old_peak_index >= self.N_max_steps_x:
                     index_difference = (old_peak_index - peak_location_indices)
-                    index_difference = np.where(index_difference<0, np.nan, index_difference)
-                    chosen_index = np.argmin(index_difference)
-                    if (old_peak_index - peak_location_indices[chosen_index]) <= max_dist:
-                        new_peak_location_index = peak_location_indices[chosen_index]
+                    mask = (index_difference>0)
+                    index_difference = np.ma.masked_array(index_difference, mask=~mask).compressed()
+                    if len(index_difference)>0:
+                        chosen_index = old_peak_index - np.min(index_difference)
+                        if (old_peak_index - chosen_index) <= max_dist:
+                            new_peak_location_index = chosen_index
+
+                            if plot_each_iteration:                    
+                                import pylab as plt
+                                plt.figure()
+                                plt.plot(self.x, eta[:])
+                                plt.plot(self.x, vel[:])
+                                for iii in peak_location_indices:
+                                    plt.plot(self.x[iii], eta[iii], 'ro')
+                                plt.plot(self.x[old_peak_index], eta[old_peak_index], 'ko')
+                                plt.plot(self.x[chosen_index], eta[chosen_index], 'kx')
+                                plt.show()
+                    else:
+                        chosen_index = None
+
+                    
                 if new_peak_location_index is None:     
                     self.stop_tracking(peak_ID)           
                     indices_to_be_removed.append(peak_ID)                    
