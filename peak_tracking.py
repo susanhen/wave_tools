@@ -4,6 +4,13 @@ from help_tools import plotting_interface
 from scipy.signal import hilbert as hilbert
 
 
+
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return idx
+
+
 def last_max_ind(eta):
     '''
     return the index of the last local maximum
@@ -164,6 +171,18 @@ class Peak:
 
     def get_breaking_start_ind_t(self, t0=0):
         return int((self.t_start-t0)/self.dt) + self.breaking_start_ind
+
+    def get_breaking_indices(self, t0=0, x0=0):
+        xi = []
+        ti = []
+        if self.breaking:
+            mask = self.Bx>self.threshold
+            N_breaking = sum(mask)
+            x_breaking = np.ma.masked_array(self.x, mask=1-mask).compressed()
+            t_breaking_ind = self.get_breaking_start_ind_t(t0=t0) + np.arange(0, N_breaking)
+            x_breaking_ind = ((x_breaking-x0)/self.dx).astype(int)
+        return t_breaking_ind, x_breaking_ind
+
 
 
     def plot_track(self, x, t, data, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
@@ -464,12 +483,12 @@ class PeakTracker:
 
     def plot_evolution_of_breaking_tracks(self, data, id_list_of_interest=None, N=None, x_extent=70, ax_list=None, cm_name='Blues', dt_plot=1):
         if id_list_of_interest is None:
-            id_list_of_interest = self.ids_breaking_tracks
+            id_list_of_interest = self.ids_breaking_peaks
         else:
-            id_list_of_interest = np.array(self.ids_breaking_edges)[id_list_of_interest]
+            id_list_of_interest = np.array(self.ids_breaking_peaks)[id_list_of_interest]
         return self.plot_evolution_of_specific_tracks(data, id_list_of_interest, N=N, x_extent=x_extent, ax_list=ax_list, cm_name=cm_name, dt_plot=dt_plot)
 
-    def plot_specific_tracks_and_mark_breaking(self, data, mask, id_list_of_interest, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None):
+    def plot_specific_tracks_and_mark_breaking(self, data, id_list_of_interest, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None):
         '''
         Plots the evolution of specific tracks
         
@@ -477,8 +496,6 @@ class PeakTracker:
         ----------
                     input
                             data                    2d array
-                                                    data to be plotted
-                            mask                    2d array
                                                     data to be plotted
                             id_list_of_interest     list
                                                     edge ids to be plotted (one figure for each)
@@ -500,21 +517,35 @@ class PeakTracker:
             N=len(id_list_of_interest)
         out_ax_list = []
         for i in range(0, N):
-            this_edge = self.edges[id_list_of_interest[i]]
+            this_peak = self.peaks[id_list_of_interest[i]]
             if ax_list is None:
                 ax = None
             else:
                 ax = ax_list[i]
-            ax = this_edge.plot_track_and_mark_breaking(self.x, self.t, data, mask, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
+            ax = this_peak.plot_track_and_mark_breaking(self.x, self.t, data, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
             out_ax_list.append(ax)
         return out_ax_list
 
-    def plot_breaking_tracks_and_mark_breaking(self, data, mask, id_list_of_interest=None, N=None, x_extent=70, dt_plot=1.):
+    def plot_breaking_tracks_and_mark_breaking(self, data, id_list_of_interest=None, N=None, x_extent=70, dt_plot=1.):
         if id_list_of_interest ==None:
-            ids = self.ids_breaking_edges
+            ids = self.ids_breaking_peaks
         else:
-            ids = np.array(self.ids_breaking_edges)[id_list_of_interest]
-        return self.plot_specific_tracks_and_mark_breaking(data, mask, ids, N, x_extent=x_extent, dt_plot=dt_plot)            
+            ids = np.array(self.ids_breaking_peaks)[id_list_of_interest]
+        return self.plot_specific_tracks_and_mark_breaking(data, ids, N, x_extent=x_extent, dt_plot=dt_plot)   
+
+    def get_breaking_mask(self, L):
+        mask = np.zeros((self.Nt, self.Nx))
+        L_indices = int(L/self.dx)
+        for peak_ID in self.ids_breaking_peaks:
+            this_peak = self.peaks[peak_ID]
+            t_inds, x_inds = this_peak.get_breaking_indices(t0=self.t[0], x0=self.x[0])
+            for i in range(0, len(t_inds)):
+                x_ind_stop = x_inds[i]
+                x_ind_start = np.max([0, x_ind_stop - L_indices])
+                mask[t_inds[i], x_ind_start:x_ind_stop] = 1
+        return mask
+
+
 
 
 
@@ -541,11 +572,6 @@ def get_PeakTracker(x, t, eta, vel, cmax=15):
         pt.track_peaks(t[i], eta[i,:], vel[i,:])
     pt.stop_tracking_all()
     return pt
-
-def find_nearest(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return idx
 
             
 
