@@ -1,6 +1,6 @@
 from numpy import diff, where, argmax, sign, mod, zeros, bitwise_and, transpose
 
-def _find_peaks1d(data, method='zero_crossing'):
+def _find_peaks1d(data, method='zero_crossing', return_values=False):
     if method =='zero_crossing':
         ind0 = where(diff(sign(data))!=0)[0]  
         N = len(ind0)-1
@@ -20,10 +20,12 @@ def _find_peaks1d(data, method='zero_crossing'):
     # in bad data (measurements with jumps, things may go wrong (eg. for all_peaks) and the negative peaks are sorted away        
     #take = where(data[peak_indices]>0)
     #peak_indices = peak_indices[take]
+    if return_values:
+        return data[peak_indices]
     return peak_indices
         
         
-def find_peaks(data, axis=0, method='zero_crossing'):
+def find_peaks(data, axis=0, method='zero_crossing', return_values=False):
     '''
     Returns the indices where the data has peaks according to the given methods:
     The maximum is calculated in one dimension indicated by the axis
@@ -36,6 +38,7 @@ def find_peaks(data, axis=0, method='zero_crossing'):
     axis        int: defines axis for calculation of peak
     method      method for finding peaks: "zero_crossing": the peak between two zero crossings; zeros crossings does not find single peaks with negative values to each side
                 method "all_peaks" finds all individiual peaks
+    return_values if True return gives peak points rather than peak indices
     
     return:     1d array for 1d data input, two arrays for 2d data input
     --------
@@ -61,12 +64,14 @@ def find_peaks(data, axis=0, method='zero_crossing'):
             return peak_indices_second[take], peak_indices_basic[take]
     else:
         N0 = len(data)   
-        return _find_peaks1d(data, method)
+        return _find_peaks1d(data, method, return_values)
+        '''
         peak_indices_basic = mod(peak_indices, data_shape[0])
         peak_indices_second = (peak_indices/N0).astype('int')  
         take = where(bitwise_and(peak_indices_basic>0, peak_indices_basic<N0-1))[0]      # remove line jumps
         return peak_indices_basic[take], peak_indices_second[take]
         #return peak_indices_basic, peak_indices_second
+        '''
     
     
     

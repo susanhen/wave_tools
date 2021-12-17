@@ -545,6 +545,18 @@ class PeakTracker:
                 mask[t_inds[i], x_ind_start:x_ind_stop] = 1
         return mask
 
+    def get_breaking_crest_speeds(self, L):
+        speeds = np.zeros((self.Nt, self.Nx))
+        L_indices = int(L/self.dx)
+        for peak_ID in self.ids_breaking_peaks:
+            this_peak = self.peaks[peak_ID]
+            c = this_peak.get_c()
+            t_inds, x_inds = this_peak.get_breaking_indices(t0=self.t[0], x0=self.x[0])
+            for i in range(0, len(t_inds)):
+                x_ind_stop = x_inds[i]
+                x_ind_start = np.max([0, x_ind_stop - L_indices])
+                speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
+        return speeds
 
 
 
