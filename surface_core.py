@@ -1236,5 +1236,5 @@ class spacetempSurface(object):
 
 
 
-    def get_peakTracker(self):
-        return peak_tracking.get_PeakTracker(self.x, self.t, self.eta, self.vel)
+    def get_peakTracker(self, max_dist=20, high_peak_thresh=3, long_peak_thresh=300):
+        return peak_tracking.get_PeakTracker(self.x, self.t, self.eta, self.vel, max_dist=max_dist, high_peak_thresh=high_peak_thresh, long_peak_thresh=long_peak_thresh)
