@@ -456,8 +456,8 @@ class PeakTracker:
                                                     edge ids to be plotted (one figure for each)
                             N                       int/None
                                                     if not None: limits the edges plotted from the given list to the provided number
-                            x_extent         float
-                                                    extent of surrounding to be plotted around edge, default:70
+                            x_extent                float
+                                                    extent of x-axis of surrounding to be plotted around edge, default:70
                             dt_plot                 float
                                                     step size for plotting in time, default: 1
                             ax_list                 list
@@ -545,9 +545,9 @@ class PeakTracker:
                 x_env, y_env = self.get_upper_envelope(this_peakID, data, env_x_max_dist)
                 ax.plot(x_env, y_env, 'r')
                 x_env, y_env = self.get_lower_envelope_front(this_peakID, data, env_x_max_dist)
-                ax.plot(x_env, y_env, 'r')
+                ax.plot(x_env, y_env, 'darkorange')
                 x_env, y_env = self.get_lower_envelope_back(this_peakID, data, env_x_max_dist)
-                ax.plot(x_env, y_env, 'r')
+                ax.plot(x_env, y_env, 'purple')
             out_ax_list.append(ax)
         return out_ax_list
 
@@ -607,9 +607,11 @@ class PeakTracker:
         t_inds, x_inds = this_peak.get_track_indices(x0=self.x[0], t0=self.t[0])
         N_track = len(t_inds)
         envelope = np.zeros(N_track)
+        x_pos = np.zeros(N_track)
         for i in range(0, N_track):
             this_x_ind = np.max([0, x_inds[i]-x_dist])
             envelope[i] = np.min(eta[t_inds[i], this_x_ind:x_inds[i]])
+            x_pos[i] = self.x[this_x_ind+np.argmin(eta[t_inds[i], this_x_ind:x_inds[i]])]
             '''
             import pylab as plt
             plt.figure()
@@ -618,7 +620,7 @@ class PeakTracker:
             plt.plot(self.x[x_inds[i]], eta[t_inds[i], x_inds[i]], 'o')
             plt.show()
             '''
-        return this_peak.x, envelope
+        return x_pos, envelope
 
     def get_lower_envelope_back(self, peakID, eta, x_max_dist=20):
         '''
@@ -629,9 +631,11 @@ class PeakTracker:
         t_inds, x_inds = this_peak.get_track_indices(x0=self.x[0], t0=self.t[0])
         N_track = len(t_inds)
         envelope = np.zeros(N_track)
+        x_pos = np.zeros(N_track)
         for i in range(0, N_track):
             this_x_ind = np.min([self.Nx-1, x_inds[i]+x_dist])
             envelope[i] = np.min(eta[t_inds[i], x_inds[i]:this_x_ind])
+            x_pos[i] = self.x[x_inds[i]+np.argmin(eta[t_inds[i],  x_inds[i]:this_x_ind])]
             '''
             import pylab as plt
             plt.figure()
@@ -640,12 +644,13 @@ class PeakTracker:
             plt.plot(self.x[x_inds[i]], eta[t_inds[i], x_inds[i]], 'o')
             plt.show()
             '''
-        return this_peak.x, envelope
+        return x_pos, envelope
 
-    def plot_envelopes(self, list_of_interest, eta, x_max_dist=20, mov_av=15, ylabel=r'$\eta~[\mathrm{m}]$'):
+    def plot_envelopes(self, list_of_interest, eta, show_all=False, show_mean=True, x_max_dist=20, mov_av=15, ylabel=r'$\eta~[\mathrm{m}]$'):
         import pylab as plt
         from help_tools.moving_average import moving_average
-        plt.figure()
+        if show_all:
+            plt.figure()
         y_env_col_u = np.zeros(self.Nx)
         y_env_col_lf = np.zeros(self.Nx)
         y_env_col_lb = np.zeros(self.Nx)
@@ -657,30 +662,35 @@ class PeakTracker:
             x_inds = ((x_env-self.x[0])/self.dx).astype(int)
             y_env_col_u[x_inds] += y_env_u
             counter_u[x_inds] += 1
-            plt.plot(x_env, y_env_u, 'r')
             x_env, y_env_lf = self.get_lower_envelope_front(peakID, eta, x_max_dist)
             x_inds = ((x_env-self.x[0])/self.dx).astype(int)
             y_env_col_lf[x_inds] += y_env_lf
             counter_lf[x_inds] += 1
-            plt.plot(x_env, y_env_lf, 'darkorange')
             x_env, y_env_lb = self.get_lower_envelope_back(peakID, eta, x_max_dist)
             x_inds = ((x_env-self.x[0])/self.dx).astype(int)
             y_env_col_lb[x_inds] += y_env_lb
             counter_lb[x_inds] += 1
-            plt.plot(x_env, y_env_lb, 'purple')
+            if show_all:
+                plt.plot(x_env, y_env_u, 'r')
+                plt.plot(x_env, y_env_lf, 'darkorange')
+                plt.plot(x_env, y_env_lb, 'purple')
+        if show_all:
+            plt.xlabel(r'$x~[\mathrm{m}]$')
+            plt.ylabel(ylabel)
             
 
         counter_u = np.where(counter_u==0, 1, counter_u)
         counter_lf = np.where(counter_lf==0, 1, counter_lf)
         counter_lb = np.where(counter_lb==0, 1, counter_lb)
 
-        plt.figure()
-        plt.plot(self.x, moving_average(y_env_col_u/counter_u, mov_av), 'r', label=r'$\mathrm{upper~envelope}$')
-        plt.plot(self.x, moving_average(y_env_col_lf/counter_lf, mov_av), 'darkorange', label=r'$\mathrm{lower~envelope~front}$')
-        plt.plot(self.x, moving_average(y_env_col_lb/counter_lb, mov_av), 'purple', label=r'$\mathrm{lower~envelope~back}$')
-        plt.xlabel(r'$x~[\mathrm{m}]$')
-        plt.ylabel(ylabel)
-        plt.legend()
+        if show_mean:
+            plt.figure()
+            plt.plot(self.x, moving_average(y_env_col_u/counter_u, mov_av), 'r', label=r'$\mathrm{upper~envelope}$')
+            plt.plot(self.x, moving_average(y_env_col_lf/counter_lf, mov_av), 'darkorange', label=r'$\mathrm{lower~envelope~front}$')
+            plt.plot(self.x, moving_average(y_env_col_lb/counter_lb, mov_av), 'purple', label=r'$\mathrm{lower~envelope~back}$')
+            plt.xlabel(r'$x~[\mathrm{m}]$')
+            plt.ylabel(ylabel)
+            plt.legend()
         
 
 
