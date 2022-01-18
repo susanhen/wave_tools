@@ -316,9 +316,11 @@ class EdgeTracker:
         return self.get_specific_tracks(self.ids_breaking_edges)
 
     def plot_specific_tracks(self, id_list_of_interest, ax):
+        if ax is None:
+            fig, ax = plt.subplots()
         x_list, t_list = self.get_specific_tracks(id_list_of_interest)
         for i in range(0, len(x_list)):
-            plotting_interface.plot(t_list[i], x_list[i], ax=ax)
+            ax.plot(t_list[i], x_list[i])
 
     def plot_all_tracks(self, ax=None):
         self.plot_specific_tracks(self.edges.keys(), ax)

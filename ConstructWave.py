@@ -579,17 +579,17 @@ if __name__=='__main__':
     '''
 
     # JONSWAP2D 
-    '''    
+    #'''    
     dx = 7.5
     dy = 7.5
     x = np.arange(-250, 250, dx)
     y = np.arange(500, 1000, dy)
     surf2d = JonswapWave2D(x, y, Hs, Alpha, gamma, theta_mean, smax)
     surf2d.plot_3d_as_2d()
-    '''
+    #'''
 
     #JONSWAP 3D similar JONSWAP2D
-    #'''
+    '''
     dx = 7.5
     dy = 7.5
     dt = 1.
@@ -605,7 +605,7 @@ if __name__=='__main__':
     fn = '../../Data/SimulatedWaves/shearing_curr_res_{0:1.1f}_dt_{1:1.1f}_T_{2:d}_U_exp(0.5z)+0.05_surf3d.hdf5'.format(dx, dt, T)
     surf3d = JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z, U, psi, fn=fn)
     #surf3d.plot_3d_as_2d(0)
-    #'''
+    '''
 
     # asymmetric Jonswap
     '''
