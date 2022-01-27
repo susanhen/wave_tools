@@ -412,7 +412,8 @@ class PeakTracker:
             this_t, this_x = peak.get_track()
             x_list.append(this_x)
             t_list.append(this_t)
-        return x_list, t_list
+        return t_list, x_list
+
 
     def get_all_tracks(self):
         return self.get_specific_tracks(self.peaks.keys())
@@ -426,8 +427,27 @@ class PeakTracker:
     def get_breaking_tracks(self):
         return self.get_specific_tracks(self.ids_breaking_peaks)
 
+    def get_specific_track_indices(self, id_list_of_interest):
+        xi_list = []
+        ti_list = []
+        for peak_ID in id_list_of_interest:
+            peak = self.peaks[peak_ID]
+            this_ti, this_xi = peak.get_track_indices()
+            xi_list.append(this_xi)
+            ti_list.append(this_ti)
+        return ti_list, xi_list
+
+    def get_breaking_track_indices(self):
+        return self.get_specific_track_indices(self.ids_breaking_peaks)
+
+    def get_high_track_indices(self):
+        return self.get_specific_track_indices(self.ids_high_peaks)
+
+    def get_long_track_indices(self):
+        return self.get_specific_track_indices(self.ids_long_peaks)
+    
     def plot_specific_tracks(self, id_list_of_interest, ax):
-        x_list, t_list = self.get_specific_tracks(id_list_of_interest)
+        t_list, x_list = self.get_specific_tracks(id_list_of_interest)
         for i in range(0, len(x_list)):
             plotting_interface.plot(t_list[i], x_list[i], ax=ax)
 
@@ -486,11 +506,11 @@ class PeakTracker:
                 ax = ax_list[i]
             ax = this_peak.plot_track(self.x, self.t, data, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
             if envelope:
-                x_env, y_env = self.get_upper_envelope(this_peakID, data, env_x_max_dist)
+                x_env, y_env = self.get_upper_envelope(this_peakID, data, env_x_max_dist_front)
                 ax.plot(x_env, y_env, 'r')
-                x_env, y_env = self.get_lower_envelope_front(this_peakID, data, env_x_max_dist)
+                x_env, y_env = self.get_lower_envelope_front(this_peakID, data, env_x_max_dist_front)
                 ax.plot(x_env, y_env, 'darkorange')
-                x_env, y_env = self.get_lower_envelope_back(this_peakID, data, env_x_max_dist)
+                x_env, y_env = self.get_lower_envelope_back(this_peakID, data, env_x_max_dist_back)
                 ax.plot(x_env, y_env, 'purple')
             out_ax_list.append(ax)
         return out_ax_list
@@ -544,7 +564,7 @@ class PeakTracker:
                 ax = ax_list[i]
             ax = this_peak.plot_track_and_mark_breaking(self.x, self.t, data, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
             if envelope:
-                x_env, y_env = self.get_upper_envelope(this_peakID, data, env_x_max_dist_front)
+                x_env, y_env = self.get_upper_envelope(this_peakID, data, 10)
                 ax.plot(x_env, y_env, 'r')
                 x_env, y_env = self.get_lower_envelope_front(this_peakID, data, env_x_max_dist_front)
                 ax.plot(x_env, y_env, 'darkorange')
@@ -561,7 +581,20 @@ class PeakTracker:
         return self.plot_specific_tracks_and_mark_breaking(data, ids, N, x_extent=x_extent, dt_plot=dt_plot)   
 
     def get_breaking_mask(self, L):
-        mask = np.zeros((self.Nt, self.Nx))
+        '''
+        return a mask that marks areas of wave breaking by one
+
+        Parameters:
+        -----------
+                    input
+                            L           float
+                                        extent in x-direction of breaking wave
+                    output
+                            mask        int array
+                                        mask: 0: not breaking 1:breaking
+                                        
+        '''
+        mask = np.zeros((self.Nt, self.Nx), dtype=int)
         L_indices = int(L/self.dx)
         for peak_ID in self.ids_breaking_peaks:
             this_peak = self.peaks[peak_ID]
@@ -573,6 +606,19 @@ class PeakTracker:
         return mask
 
     def get_breaking_crest_speeds(self, L):
+        '''
+        This function defines the speed of the particles in areas of breaking.
+        The speed is defined as the crest speed
+
+        Parameters:
+        -----------
+                    input       
+                            L       float
+                                    extent in x-direction of breaking wave
+                    output
+                            speeds  float array
+                                    crest speed of the waves provided where wave breaking occurs, otherwise 0
+        '''
         speeds = np.zeros((self.Nt, self.Nx))
         L_indices = int(L/self.dx)
         for peak_ID in self.ids_breaking_peaks:
@@ -585,7 +631,7 @@ class PeakTracker:
                 speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
         return speeds
 
-    def get_upper_envelope(self, peakID, eta, x_max_dist=20):
+    def get_upper_envelope(self, peakID, eta, x_max_dist=10):
         '''
         return upper envelope of track (equivalent to peaks)
         '''
@@ -598,6 +644,15 @@ class PeakTracker:
             first_x_ind = np.max([0, x_inds[i]-x_dist])
             last_x_ind = np.min([self.Nx-1, x_inds[i]+x_dist])
             envelope[i] = np.max(eta[t_inds[i], first_x_ind:last_x_ind])
+            '''
+            import pylab as plt
+            plt.figure()
+            plt.plot(self.x, eta[t_inds[i], :])
+            plt.plot(self.x[x_inds[i]], eta[t_inds[i], x_inds[i]], 'o')
+            plt.plot(self.x[first_x_ind:last_x_ind], eta[t_inds[i], first_x_ind:last_x_ind])
+            plt.plot(self.x[x_inds[i]], envelope[i], 'x')
+            plt.show()
+            '''
         return this_peak.x, envelope
 
     def get_lower_envelope_front(self, peakID, eta, x_max_dist=20):
@@ -612,6 +667,18 @@ class PeakTracker:
         x_pos = np.zeros(N_track)
         for i in range(0, N_track):
             this_x_ind = np.max([0, x_inds[i]-x_dist])
+            '''
+            next_peak_ind = find_peaks.find_peaks(eta[t_inds[i], this_x_ind:x_inds[i]], method='all_peaks')
+            if len(next_peak_ind) == 0:
+                x_ind_offset = np.argmin(eta[t_inds[i], this_x_ind:x_inds[i]])
+                front_peak_ind = this_x_ind + x_ind_offset
+            else:
+                next_peak_ind = this_x_ind + next_peak_ind[-1]
+                front_peak_ind = next_peak_ind + np.argmin(eta[t_inds[i], next_peak_ind:x_inds[i]])
+            
+            envelope[i] = eta[t_inds[i], front_peak_ind]
+            x_pos[i] = self.x[front_peak_ind]
+            '''
             envelope[i] = np.min(eta[t_inds[i], this_x_ind:x_inds[i]])
             x_pos[i] = self.x[this_x_ind+np.argmin(eta[t_inds[i], this_x_ind:x_inds[i]])]
             '''
@@ -620,6 +687,7 @@ class PeakTracker:
             plt.plot(self.x, eta[t_inds[i], :])
             plt.plot(self.x[x_inds[i] - x_dist:x_inds[i]], eta[t_inds[i], x_inds[i] - x_dist:x_inds[i]])
             plt.plot(self.x[x_inds[i]], eta[t_inds[i], x_inds[i]], 'o')
+            plt.plot(x_pos[i], envelope[i], 'x')
             plt.show()
             '''
         return x_pos, envelope
@@ -636,6 +704,16 @@ class PeakTracker:
         x_pos = np.zeros(N_track)
         for i in range(0, N_track):
             this_x_ind = np.min([self.Nx-1, x_inds[i]+x_dist])
+            '''
+            x_ind_offset = find_peaks.find_peaks(20-eta[t_inds[i], x_inds[i]:this_x_ind], method='all_peaks')
+            if len(x_ind_offset)==0:
+                x_ind_offset = this_x_ind
+            else:
+                x_ind_offset = x_ind_offset[0]
+            back_peak_ind = x_inds[i] + x_ind_offset
+            envelope[i] = eta[t_inds[i], back_peak_ind]
+            x_pos[i] = self.x[back_peak_ind]
+            '''
             envelope[i] = np.min(eta[t_inds[i], x_inds[i]:this_x_ind])
             x_pos[i] = self.x[x_inds[i]+np.argmin(eta[t_inds[i],  x_inds[i]:this_x_ind])]
             '''
@@ -644,11 +722,12 @@ class PeakTracker:
             plt.plot(self.x, eta[t_inds[i], :])
             plt.plot(self.x[x_inds[i]:this_x_ind], eta[t_inds[i], x_inds[i]:this_x_ind])
             plt.plot(self.x[x_inds[i]], eta[t_inds[i], x_inds[i]], 'o')
+            plt.plot(x_pos[i], envelope[i], 'x)
             plt.show()
             '''
         return x_pos, envelope
 
-    def plot_envelopes(self, list_of_interest, eta, show_all=False, show_mean=True, x_max_dist_front=20, x_max_dist_back=20, mov_av=15, ylabel=r'$\eta~[\mathrm{m}]$'):
+    def plot_envelopes(self, list_of_interest, eta, show_all=False, show_mean=True, x_max_center=0, x_max_dist_front=20, x_max_dist_back=20, mov_av=15, ylabel=r'$\eta~[\mathrm{m}]$'):
         import pylab as plt
         from help_tools.moving_average import moving_average
         if show_all:
@@ -660,7 +739,7 @@ class PeakTracker:
         counter_lf = np.zeros(self.Nx)
         counter_lb = np.zeros(self.Nx)
         for peakID in list_of_interest:
-            x_env, y_env_u = self.get_upper_envelope(peakID, eta, x_max_dist_front)
+            x_env, y_env_u = self.get_upper_envelope(peakID, eta, x_max_center)
             x_inds = ((x_env-self.x[0])/self.dx).astype(int)
             y_env_col_u[x_inds] += y_env_u
             counter_u[x_inds] += 1
@@ -696,7 +775,7 @@ class PeakTracker:
         return ax
 
 
-def get_PeakTracker(x, t, eta, vel, cmax=15, max_dist=30, high_peak_thresh=3, long_peak_thresh=300, plot_tracking=False, breaking_mask=None):
+def get_PeakTracker(x, t, eta, vel, cmax=15, max_dist=30, high_peak_thresh=3, long_peak_thresh=300, plot_tracking=False, breaking_mask=None, smoothen_input=False):
     '''
     Creates and instance of Peak Tracker and tracks all peaks and returns the instance
 
@@ -721,6 +800,8 @@ def get_PeakTracker(x, t, eta, vel, cmax=15, max_dist=30, high_peak_thresh=3, lo
                                     threshold for classifying peaks as long
                 plot_tracking       bool
                                     for debugging: put to True and se how tracking happens
+                smoothen_input      bool
+                                    True: apply smoothing before running algorithm; Default: False
     '''
     pt = PeakTracker(x, t, eta[0,:], vel[0,:], cmax=cmax, high_peak_thresh=high_peak_thresh, long_peak_thresh=long_peak_thresh)
     for i in range(1, len(t)):

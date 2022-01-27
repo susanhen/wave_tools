@@ -1131,13 +1131,41 @@ class spacetempSurface(object):
             illumination[:,i+1:] *= np.outer(radar_point_angle[:,i], np.ones(self.Nx-i-1)) < radar_point_angle[:,i+1:] 
         return illumination 
 
-    def get_illumination_function_relaxed(self, H, relaxation_factor=1.05):
+    def get_illumination_function_relaxed(self, H, relaxation_factor=1):
         # Assuming that spatial dimension is along the radar beam
         r = np.outer(np.ones(self.Nt), np.abs(self.x))
         radar_point_angle = np.arctan2(r, (H - self.eta))        
         illumination = np.ones(r.shape)
+        '''
+        max_dist = 10
+        for i in range(0,self.Nx-1-max_dist): 
+            illumination[:,i+1:i+1+max_dist] *= np.outer(radar_point_angle[:,i], np.ones(max_dist)) < (radar_point_angle[:,i+1:i+1+max_dist] )
+        # TODO finish rest of array !
+        for i in range(self.Nx-1-max_dist, self.Nx-1):
+            illumination[:,i+1:] *= np.outer(radar_point_angle[:,i], np.ones(self.Nx-1-i) < (radar_point_angle[:,i+1:] )
+        '''
+
+        
         for i in range(0,self.Nx-1): 
-            illumination[:,i+1:] *= np.outer(radar_point_angle[:,i], np.ones(self.Nx-i-1)) < relaxation_factor*radar_point_angle[:,i+1:] 
+            illumination[:,i+1:] *= np.outer(radar_point_angle[:,i], np.ones(self.Nx-1-i)) < 0.1+(radar_point_angle[:,i+1:] )
+        # TODO finish rest of array !
+
+        fig, ax = plt.subplots()
+        ax.plot(self.x, self.eta[10,:])
+        ax.plot(self.x, illumination[10,:])
+        ax2 = ax.twinx()
+        ax2.plot(self.x, radar_point_angle[10,:], color='darkorange')
+        fig, ax = plt.subplots()
+        ax.plot(self.x, self.eta[50,:])
+        ax.plot(self.x, illumination[50,:])
+        ax2 = ax.twinx()
+        ax2.plot(self.x, radar_point_angle[50,:], color='darkorange')
+        fig, ax = plt.subplots()
+        ax.plot(self.x, self.eta[80,:])
+        ax.plot(self.x, illumination[80,:])
+        ax2 = ax.twinx()
+        ax2.plot(self.x, radar_point_angle[80,:], color='darkorange')
+        plt.show()
         return illumination 
 
     def get_surf_at_index(self, time_index):
