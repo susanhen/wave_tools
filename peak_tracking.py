@@ -606,7 +606,7 @@ class PeakTracker:
                 mask[t_inds[i], x_ind_start:x_ind_stop] = 1
         return mask
 
-    def get_breaking_mask(self, surf):
+    def get_breaking_mask(self, eta):
         '''
         return a mask that marks areas of wave breaking by one, using tilt to determine wave size.
 
@@ -630,7 +630,7 @@ class PeakTracker:
                 l = 0
                 while control == True:
                     x_ind_start = x_inds[i] - l
-                    tilt = np.arctan2(surf.eta[t_inds[i], x_ind_start] - surf.eta[t_inds[i], x_ind_start-1], this_peak.dx)
+                    tilt = np.arctan2(eta[t_inds[i], x_ind_start] - eta[t_inds[i], x_ind_start-1], this_peak.dx)
                     if tilt <= 0.1:
                         control = False
                     l = l+1
@@ -663,7 +663,7 @@ class PeakTracker:
                 speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
         return speeds
 
-    def get_breaking_crest_speeds(self, surf):
+    def get_breaking_crest_speeds(self, eta):
         '''
         This function defines the speed of the particles in areas of breaking.
         The speed is defined as the crest speed
@@ -688,7 +688,7 @@ class PeakTracker:
                 l = 0
                 while control == True:
                     x_ind_start = x_inds[i] - l
-                    tilt = np.arctan2(surf.eta[t_inds[i], x_ind_start] - surf.eta[t_inds[i], x_ind_start-1], this_peak.dx)
+                    tilt = np.arctan2(eta[t_inds[i], x_ind_start] - eta[t_inds[i], x_ind_start-1], this_peak.dx)
                     if tilt <= 0.1:
                         control = False
                     l = l+1
