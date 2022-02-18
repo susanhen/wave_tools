@@ -5,6 +5,9 @@ from radar_tools import dispersion_filter, filter_core
 import functools
 import operator
 import scipy
+from scipy.ndimage import gaussian_filter
+
+from scipy.signal import savgol_filter
 
 def _symmetrize2d(surf):
     Nx, Ny = surf.shape
@@ -569,7 +572,7 @@ class _SpectralAnalysis3d(object):
         return coeffs_extended, spectrum_extended, grid
         
 
-    def get_k_w_slice_at_peak(self, Nr, Ntheta):
+    def get_k_w_slice_at_peak(self, Nr, Ntheta, U_eff=None, Psi=None):
         peak_indices = np.unravel_index(np.argmax(self.spectrum), (self.Nt, self.Nx, self.Ny))
         at_theta = np.arctan2(peak_indices[2], peak_indices[1])
         # test ouput... remove large k values
@@ -582,22 +585,37 @@ class _SpectralAnalysis3d(object):
             spec2d = SpectralAnalysis(self.coeffs[i,:,:], self.spectrum[i,:,:], [self.kx, self.ky])
             k, w_k_spec[i,:] = spec2d.spectrumND.get_theta_slice(at_theta, Nr, Ntheta)
         k_w_spec = w_k_spec.T
-
+        if U_eff is None:
+            Ueff = 0
+            Psi = 0
         plotting_interface.plot_3d_as_2d(k, self.w, k_w_spec)
-        plotting_interface.plot(k, np.sqrt(9.81*k))
-        plotting_interface.plot(k, -np.sqrt(9.81*k))
+        plotting_interface.plot(k, np.sqrt(9.81*k)+k*Ueff*np.cos(Psi))
+        plotting_interface.plot(k, -np.sqrt(9.81*k)+k*Ueff*np.cos(Psi))
         #plt.plot(measured_k1[choose1], self.w[choose1], '--')
         #plt.plot(measured_k2[choose2], self.w[choose2], ':')
         plotting_interface.show()
+        return k, self.w, k_w_spec
 
 
     def transform_spectrum_to_polar(self, Nr, Ntheta):        
         return polar_coordinates.cart2cylindrical(self.kx, self.ky, self.spectrum, Nr=Nr, Ntheta=Ntheta)
 
 
-    def estimate_dispersion_cone(self, h, Umax, kmin=0.04, kmax=0.3, plot_it=False):
+    def estimate_dispersion_cone(self, h, Umax, kmin=0.04, kmax=0.5, plot_it=False):
         '''
-        Estimate dispersion cone
+        Estimate dispersion cone. It returns a representation of the dispersion cone where the energy is high enough
+
+        Algorithm: 
+        - Pass to polar coordinates 
+        - apply dispersion filter to avoid using aliased data etc. 
+        - select part of arc where there is energy (>0.1max)
+        - define relevant k based on upper and lower bounds of k on the grid (close to kmin, kmax provided)
+        - select part of spectrum representing relevant theta and k values 
+        - loop through theta:
+            - apply gaussian blur
+            - find peak of w for for all k of interest along the given angle
+        
+        
 
         Parameters:
         -----------
@@ -614,16 +632,28 @@ class _SpectralAnalysis3d(object):
                                     if data and cone slice should be shown
 
                     output:
-                            k_rel   array
-                                    vector of wave numbers for which the dispersion cone is defined
+                            k_rel       array
+                                        vector of wave numbers for which the dispersion cone is defined
                             theta_rel  array
-                                    vector of azimuth angles for which the dispersino cone is defined
-                            disp_cone   2d array
+                                        vector of azimuth angles for which the dispersion cone is defined
+                            w compo. of disp_cone   2d array
                                         angular frequency for each combinatin of wave numbers and angle 
         '''
         w_upper = self.w[self.Nt//2:]
         half_spec = np.flip(self.spectrum[1:self.Nt//2+1,:,:], axis=0)
-        k, theta, spec_pol = polar_coordinates.cart2cylindrical(w_upper, self.kx, self.ky, half_spec, Ntheta=100)             
+        filtered_half_spec = gaussian_filter(half_spec, (0.5,0.3,0.3))
+        '''
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (half_spec[229,:,:]))
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (filtered_half_spec[229,:,:]))
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (half_spec[200,:,:]))
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (filtered_half_spec[200,:,:]))
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (half_spec[250,:,:]))
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (filtered_half_spec[250,:,:]))
+        plotting_interface.show()
+        '''
+
+        #k, theta, spec_pol = polar_coordinates.cart2cylindrical(w_upper, self.kx, self.ky, half_spec, Ntheta=100)     
+        k, theta, spec_pol = polar_coordinates.cart2cylindrical(w_upper, self.kx, self.ky, filtered_half_spec, Ntheta=100)            
         spec_pol = np.abs(spec_pol)
         
         # dispersion filter
@@ -643,23 +673,37 @@ class _SpectralAnalysis3d(object):
         w_matrix = np.zeros((len(k_rel), len(theta_rel)))
         rel_spec = masked_spec_pol[:,k_min_ind:k_max_ind+1,rel_indices]
         min_dw = 4* np.sqrt(self.dkx*9.81)
-        dw_max = np.maximum(k_rel*Umax, min_dw)
         ww, kk = np.meshgrid(w_upper, k_rel, indexing='ij')
-        w0_rel = np.sqrt(kk*9.81*np.tanh(kk*h))
 
         
         for i in range(0, len(theta_rel)):
-            input_spec = convolutional_filters.apply_Gaussian_blur(rel_spec[:,:,i])
-            w_peaks = np.sum(input_spec**0.3 * ww, axis=0)/np.sum(input_spec**0.3, axis=0)
-            w_matrix[:,i] = w_peaks
+            input_spec = rel_spec[:,:,i]#convolutional_filters.apply_Gaussian_blur(rel_spec[:,:,i])
+            max_input_spec = np.outer(np.ones(len(w_upper)), np.max(input_spec, axis=0) )
+            # filtering relative to the power along w-axis otherwise spectral noise in the center moves the cone to the center
+            input_spec = np.where(input_spec>0.1*max_input_spec, input_spec, 0)
+            pow = 0.3
+            pow2 = 1
+            w_peaks = (np.sum(input_spec**pow * ww**pow2, axis=0)/np.sum(input_spec**pow, axis=0))**(1./pow2)
+            w_matrix[:,i] = savgol_filter(w_peaks, 11, 3)#w_peaks
             
             if plot_it:
                 scaled_2d = spec_pol[:,k_min_ind:k_max_ind,i]/np.max(spec_pol[:,k_min_ind:k_max_ind,i])
                 #plotting_interface.plot_k_w_spec(k_rel, w_upper, np.log10(scaled_2d).T, extent=[0.03, 0.35, 0.5, 1.9])
-                plotting_interface.plot_k_w_spec(k_rel, w_upper, np.log10(input_spec).T, extent=[0.03, 0.35, 0.5, 1.9])
+                plotting_interface.plot_k_w_spec(k_rel, w_upper, (input_spec).T, extent=[0.03, 0.35, 0.5, 1.9])
                 plotting_interface.plot(k_rel, w_peaks)
-                plotting_interface.plot(k_rel, np.sqrt(k_rel*9.81*np.tanh(k_rel*h)))
+                plotting_interface.plot(k_rel, savgol_filter(w_peaks, 11, 3))
+                #plotting_interface.plot(k_rel, np.sqrt(k_rel*9.81*np.tanh(k_rel*h)))
                 plotting_interface.show()
+        '''
+        ax = plotting_interface.plot_k_w_spec(k_rel, theta_rel, (rel_spec[229,:,:]))
+        CS = ax.contour(k_rel, theta_rel, w_matrix.T, origin='lower', levels=[1.18, 1.199, 1.21], colors='green')
+        w_orig_ind = np.argmin(np.abs(w_upper-1.2))
+        out = np.array(CS.allsegs[0][0])
+        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (half_spec[w_orig_ind,:,:]))
+        x_points = out[:,0]
+        y_points = out[:,1]
+        plotting_interface.plot(x_points*np.cos(y_points), x_points*np.sin(y_points))
+        '''
         return k_rel, theta_rel, w_matrix
 
     def estimate_dispersion_slices(self, h, Umax, kmin=0.04, kmax=0.3, wmin=0.8, wmax=1.8, plot_it=False):
@@ -709,11 +753,11 @@ class _SpectralAnalysis3d(object):
             k_matrix[:,i] = F(w_rel)
         return w_rel, theta_rel, k_matrix
 
-    def estimate_Ueff_psi(self, h, Umax, kmin=0.04, kmax=0.3, wmin=0.8, wmax=1.8, ax=None, U0_vec=[0,0], k_limit=None):
+    def estimate_Ueff_psi(self, h, Umax, kmin=0.04, kmax=0.3, wmin=0.8, wmax=1.8, ax=None, U0_vec=[0,0], k_limit=None, plot_it=False):
         if k_limit is None:
             k_limit = self.kx[-1]
 
-        w_rel, theta_rel, k_matrix = self.estimate_dispersion_slices(h, Umax, kmin, kmax, wmin, wmax)
+        w_rel, theta_rel, k_matrix = self.estimate_dispersion_slices(h, Umax, kmin, kmax, wmin, wmax, plot_it=plot_it)
 
         # collectors for estimates
         U_effs = np.zeros(len(w_rel))
@@ -1148,7 +1192,7 @@ class SpectralAnalysis(object):
             print('Error: Not available, the current estimation requires a 3d surface')
         
     
-    def estimate_Ueff_psi(self, h, Umax, ax=None, k_limit=None):
+    def estimate_Ueff_psi(self, h, Umax, kmin=0.04, kmax=0.3, ax=None, k_limit=None, plot_it=False):
         '''
         Estimate the current for the given spectrum.
         The estimation is performed separately for each angular frequency
@@ -1165,6 +1209,8 @@ class SpectralAnalysis(object):
                                 for plotting
                     k_limit     float, optional
                                 for limiting the kx,ky-extent
+                    plot_it     bool
+                                switch for plotting validation of defining line segments
                                 
             return
                     w_rel       array
@@ -1175,11 +1221,11 @@ class SpectralAnalysis(object):
                                 current direction in rad for each Ueff
         '''
         if self.ND==3:
-            return self.spectrumND.estimate_Ueff_psi(h, Umax, ax=ax, k_limit=k_limit)
+            return self.spectrumND.estimate_Ueff_psi(h, Umax, kmin=kmin, kmax=kmax, ax=ax, k_limit=k_limit, plot_it=plot_it)
         else:
             print('Error: Not available, the current estimation requires a 3d surface')    
 
-    def get_k_w_slice_at_peak(self, Ntheta=360):
+    def get_k_w_slice_at_peak(self, Ntheta=360, U_eff=None, Psi=None):
         Nr = np.max([self.spectrumND.Nx, self.spectrumND.Ny])        
         if self.ND == 3:
             return self.spectrumND.get_k_w_slice_at_peak(Nr, Ntheta)

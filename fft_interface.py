@@ -1,7 +1,8 @@
 import numpy as np
 
 def grid2k(grid):
-    dx = abs(grid[-1]-grid[-2])    
+    grid = grid - grid[0]
+    dx = abs(grid[1]-grid[0])    
     N = len(grid)
     kmin = -np.pi/dx
     dk = 2*np.pi/(dx*N)

@@ -1,6 +1,6 @@
 import numpy as np
 from wave_tools import find_peaks, find_freak_waves, fft_interface, fft_interpolate, peak_tracking
-from wave_tools import SpectralAnalysis
+from wave_tools import SpectralAnalysis, Spectrum
 import matplotlib.pyplot as plt
 from help_tools import plotting_interface, polar_coordinates
 import h5py
@@ -747,6 +747,32 @@ class Surface(object):
             k_grid = [w, kx, ky]
         return SpectralAnalysis.SpectralAnalysis(coeffs, abs(coeffs)**2, k_grid, self.window_applied, grid_cut_off)
 
+    def define_WelchSpectrum(self, N_intervals=2):
+        '''
+        Create object in spectral domain that corresponds to the given surface and the given grid      
+        '''
+        '''
+        if self.ND==1:
+            grid = [self.x]
+            x, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)  
+            k_grid = [x]            
+        elif self.ND==2:
+            grid = [self.x, self.y]
+            x, y, coeffs = fft_interface.physical2spectral(self.etaND.eta.copy(), grid)            
+            k_grid = [x,y] 
+        '''
+        if self.ND==3:
+            Nt, Nx, Ny = self.etaND.eta.shape
+            Nt_max = Nt//N_intervals
+            t = self.t[:Nt_max]
+            grid = [t, self.x, self.y]   
+            coeffs = np.zeros((N_intervals, Nt_max, Nx, Ny), dtype='complex')
+            for i in range(0, N_intervals):
+                w, kx, ky, coeffs[i,:,:,:] = fft_interface.physical2spectral(self.etaND.eta[i*Nt_max:(i+1)*Nt_max,:,:], grid)                   
+            k_grid = [w, kx, ky]
+            spec = np.mean(np.abs(coeffs)**2, axis=0)
+        return Spectrum.Spectrum(spec, k_grid)
+
     def save(self, fn):
         self.etaND.save(fn, self.name, self.window_applied)
 
@@ -794,22 +820,42 @@ def surface_from_file(fn, spaceTime=False):
     eta = np.array(hf.get('eta'))
     ND = hf.attrs['ND']
     x = np.array(hf.get('x'))
+    if np.mod(len(x),2)==0:
+        Nx = len(x)
+    else:
+        Nx = len(x)-1
     if ND == 1:
-        grid = [x]
-        return Surface(name, eta, grid, window_applied)
+        grid = [x[:Nx]]
+        return Surface(name, eta[:Nx], grid, window_applied)
     elif ND==2 and spaceTime==False:
         y = np.array(hf.get('y') )
-        grid = [x, y]
-        return Surface(name, eta, grid, window_applied)
+        if np.mod(len(y),2)==0:
+            Ny = len(y)
+        else:
+            Ny = len(y)-1
+        grid = [x[:Nx], y[:Ny]]
+        return Surface(name, eta[:Nx, :Ny], grid, window_applied)
     elif ND==2 and spaceTime==True:
         t = np.array(hf.get('t'))
-        grid = np.array([x, t])
-        return spacetempSurface(name, eta, grid, window_applied)
+        if np.mod(len(t),2)==0:
+            Nt = len(t)
+        else:
+            Nt = len(t)-1
+        grid = np.array([x[:Nx], t[:Nt]])
+        return spacetempSurface(name, eta[:Nt, :Nx], grid, window_applied)
     elif ND==3:
         t = np.array(hf.get('t'))
         y = np.array(hf.get('y') )
-        grid = [t, x, y]
-        return Surface(name, eta, grid, window_applied)
+        if np.mod(len(y),2)==0:
+            Ny = len(y)
+        else:
+            Ny = len(y)-1
+        if np.mod(len(t),2)==0:
+            Nt = len(t)
+        else:
+            Nt = len(t)-1
+        grid = [t[:Nt], x[:Nx], y[:Ny]]
+        return Surface(name, eta[:Nt,:Nx,:Ny], grid, window_applied)
 
 def illumination_from_file(fn, H):
     '''
@@ -1136,36 +1182,26 @@ class spacetempSurface(object):
         r = np.outer(np.ones(self.Nt), np.abs(self.x))
         radar_point_angle = np.arctan2(r, (H - self.eta))        
         illumination = np.ones(r.shape)
-        '''
-        max_dist = 10
-        for i in range(0,self.Nx-1-max_dist): 
-            illumination[:,i+1:i+1+max_dist] *= np.outer(radar_point_angle[:,i], np.ones(max_dist)) < (radar_point_angle[:,i+1:i+1+max_dist] )
-        # TODO finish rest of array !
-        for i in range(self.Nx-1-max_dist, self.Nx-1):
-            illumination[:,i+1:] *= np.outer(radar_point_angle[:,i], np.ones(self.Nx-1-i) < (radar_point_angle[:,i+1:] )
-        '''
-
         
-        for i in range(0,self.Nx-1): 
-            illumination[:,i+1:] *= np.outer(radar_point_angle[:,i], np.ones(self.Nx-1-i)) < 0.1+(radar_point_angle[:,i+1:] )
-        # TODO finish rest of array !
-
-        fig, ax = plt.subplots()
-        ax.plot(self.x, self.eta[10,:])
-        ax.plot(self.x, illumination[10,:])
-        ax2 = ax.twinx()
-        ax2.plot(self.x, radar_point_angle[10,:], color='darkorange')
-        fig, ax = plt.subplots()
-        ax.plot(self.x, self.eta[50,:])
-        ax.plot(self.x, illumination[50,:])
-        ax2 = ax.twinx()
-        ax2.plot(self.x, radar_point_angle[50,:], color='darkorange')
-        fig, ax = plt.subplots()
-        ax.plot(self.x, self.eta[80,:])
-        ax.plot(self.x, illumination[80,:])
-        ax2 = ax.twinx()
-        ax2.plot(self.x, radar_point_angle[80,:], color='darkorange')
+        max_dist = 30
+        '''
+        for i in range(1,self.Nx): 
+            start_i = np.max([0, i-max_dist])
+            illumination[:,i] = np.min(np.outer(relaxation_factor*radar_point_angle[:,i], np.ones(i-start_i)) > radar_point_angle[:,start_i:i], axis=1).flatten()
+        '''
+        for i in range(1, self.Nx):
+            start_i = np.max([0, i-max_dist])
+            illumination[:,i] = 1-np.sum(np.outer(relaxation_factor*radar_point_angle[:,i], np.ones(i-start_i)) < radar_point_angle[:,start_i:i], axis=1)/(i-start_i)
+        #'''
+        fig, ax = plt.subplots(3)
+        ax[0].plot(self.eta[10,:])
+        ax[0].plot(illumination[10,:])
+        ax[1].plot(self.eta[40,:])
+        ax[1].plot(illumination[40,:])
+        ax[2].plot(self.eta[80,:])
+        ax[2].plot(illumination[80,:])
         plt.show()
+        #'''
         return illumination 
 
     def get_surf_at_index(self, time_index):
