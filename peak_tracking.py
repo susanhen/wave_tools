@@ -580,7 +580,8 @@ class PeakTracker:
             ids = np.array(self.ids_breaking_peaks)[id_list_of_interest]
         return self.plot_specific_tracks_and_mark_breaking(data, ids, N, x_extent=x_extent, dt_plot=dt_plot)   
 
-    def get_breaking_mask(self, L):
+
+    def get_breaking_mask_fixed_L(self, L):
         '''
         return a mask that marks areas of wave breaking by one
 
@@ -605,7 +606,38 @@ class PeakTracker:
                 mask[t_inds[i], x_ind_start:x_ind_stop] = 1
         return mask
 
-    def get_breaking_crest_speeds(self, L):
+    def get_breaking_mask(self, surf):
+        '''
+        return a mask that marks areas of wave breaking by one, using tilt to determine wave size.
+
+        Parameters:
+        -----------
+                    input
+                            L           float
+                                        extent in x-direction of breaking wave
+                    output
+                            mask        int array
+                                        mask: 0: not breaking 1:breaking
+                                        
+        '''
+        mask = np.zeros((self.Nt, self.Nx), dtype=int)
+        for peak_ID in self.ids_breaking_peaks:
+            this_peak = self.peaks[peak_ID]
+            t_inds, x_inds = this_peak.get_breaking_indices(t0=self.t[0], x0=self.x[0])
+            for i in range(0, len(t_inds)):
+                control = True
+                x_ind_stop = x_inds[i]
+                l = 0
+                while control == True:
+                    x_ind_start = x_inds[i] - l
+                    tilt = np.arctan2(surf.eta[t_inds[i], x_ind_start] - surf.eta[t_inds[i], x_ind_start-1], this_peak.dx)
+                    if tilt <= 0.1:
+                        control = False
+                    l = l+1
+                mask[t_inds[i], x_ind_start:x_ind_stop] = 1
+        return mask
+
+    def get_breaking_crest_speeds_fixed_L(self, L):
         '''
         This function defines the speed of the particles in areas of breaking.
         The speed is defined as the crest speed
@@ -628,6 +660,38 @@ class PeakTracker:
             for i in range(0, len(t_inds)):
                 x_ind_stop = x_inds[i]
                 x_ind_start = np.max([0, x_ind_stop - L_indices])
+                speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
+        return speeds
+
+    def get_breaking_crest_speeds(self, surf):
+        '''
+        This function defines the speed of the particles in areas of breaking.
+        The speed is defined as the crest speed
+
+        Parameters:
+        -----------
+                    input       
+                            L       float
+                                    extent in x-direction of breaking wave
+                    output
+                            speeds  float array
+                                    crest speed of the waves provided where wave breaking occurs, otherwise 0
+        '''
+        speeds = np.zeros((self.Nt, self.Nx))
+        for peak_ID in self.ids_breaking_peaks:
+            this_peak = self.peaks[peak_ID]
+            c = this_peak.get_c()
+            t_inds, x_inds = this_peak.get_breaking_indices(t0=self.t[0], x0=self.x[0])
+            for i in range(0, len(t_inds)):
+                control = True
+                x_ind_stop = x_inds[i]
+                l = 0
+                while control == True:
+                    x_ind_start = x_inds[i] - l
+                    tilt = np.arctan2(surf.eta[t_inds[i], x_ind_start] - surf.eta[t_inds[i], x_ind_start-1], this_peak.dx)
+                    if tilt <= 0.1:
+                        control = False
+                    l = l+1
                 speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
         return speeds
 
