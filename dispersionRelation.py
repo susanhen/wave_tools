@@ -78,6 +78,7 @@ def calc_wavenumber(w, h, Ueff, psi, Ntheta, Niter_max=200, eps=10**(-6)):
     # start
     ki = ww**2/g
     phi = th - psi
+    Ueff = np.outer(Ueff, np.ones(Ntheta))
     wwt = np.sqrt(g*ki*np.tanh(ki*h)) + ki*Ueff*np.cos(phi)
     
     count=0

@@ -772,8 +772,9 @@ class _SpectralAnalysis3d(object):
 
             if ax is not None:
                 w_ind = np.argmin(np.abs(at_w-self.w))
+                k_for_Ueff= dispersionRelation.calc_wavenumber(w_rel, h, U_effs, psis, 360)
                 plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum[w_ind,:,:], ax=ax, extent=[-k_limit, k_limit, -k_limit, k_limit])
-                plotting_interface.plot_disp_rel_for_Ueff_at(at_w, h, U_effs[i], psis[i], 'w', ax=ax, extent=[-k_limit, k_limit, -k_limit, k_limit])
+                plotting_interface.plot_disp_rel_for_Ueff_at(at_w, h, k_for_Ueff, U_effs[i], psis[i], 'w', ax=ax, extent=[-k_limit, k_limit, -k_limit, k_limit])
 
             i = i + 1
         return w_rel, U_effs, psis
@@ -813,7 +814,8 @@ class _SpectralAnalysis3d(object):
 
             if ax is not None:
                 spec2d.plot(ax=ax)
-                plotting_interface.plot_disp_rel_for_Ueff_at(at_w, h, U_effs[i], psis[i], 'w', ax=ax, extent=[-k_limit, k_limit, -k_limit, k_limit])
+                k_for_Ueff= dispersionRelation.calc_wavenumber(at_w, h, U_effs, psis, 360)
+                plotting_interface.plot_disp_rel_for_Ueff_at(at_w, h, k_for_Ueff, U_effs[i], psis[i], 'w', ax=ax, extent=[-k_limit, k_limit, -k_limit, k_limit])
 
             i = i + 1
         return U_effs, psis
@@ -1215,6 +1217,10 @@ class SpectralAnalysis(object):
             return
                     w_rel       array
                                 levels of angular frequency for which Ueff and psi have been estimated
+                    theta_rel   array
+                                angles to define the relation between w_rel and k_matrix
+                    k_matrix    array
+                                k_values for each w_rel, theta
                     Ueff        array
                                 effective currents for each w
                     psi         array
