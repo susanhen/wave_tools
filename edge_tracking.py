@@ -130,6 +130,7 @@ class Edge:
             ax.plot(x[start_ind:end_ind+1], data[t_ind[i], start_ind:end_ind+1], color=colors[i])
             ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'x', color=colors[i])
         ax.set_ylabel(label)
+        ax.set_xlabel(r'$r~[m]$')
         return ax
 
     def plot_track_and_mark_breaking(self, x, t, data, mask, label, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
@@ -156,6 +157,7 @@ class Edge:
                 #first_breaking_ind = start_ind + np.argwhere(mask[t_ind[i], start_ind:end_ind+1]==1)#[-1]
                 ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'rx')#, color=colors[i])
         ax.set_ylabel(label)
+        ax.set_xlabel(r'$r~[m]$')
         return ax
 
 
