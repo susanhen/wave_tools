@@ -642,15 +642,6 @@ class _SpectralAnalysis3d(object):
         w_upper = self.w[self.Nt//2:]
         half_spec = np.flip(self.spectrum[1:self.Nt//2+1,:,:], axis=0)
         filtered_half_spec = gaussian_filter(half_spec, (0.5,0.3,0.3))
-        '''
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (half_spec[229,:,:]))
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (filtered_half_spec[229,:,:]))
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (half_spec[200,:,:]))
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (filtered_half_spec[200,:,:]))
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (half_spec[250,:,:]))
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (filtered_half_spec[250,:,:]))
-        plotting_interface.show()
-        '''
 
         #k, theta, spec_pol = polar_coordinates.cart2cylindrical(w_upper, self.kx, self.ky, half_spec, Ntheta=100)     
         k, theta, spec_pol = polar_coordinates.cart2cylindrical(w_upper, self.kx, self.ky, filtered_half_spec, Ntheta=100)            
@@ -663,7 +654,7 @@ class _SpectralAnalysis3d(object):
         
         # select arc with energy          
         theta_spec = np.sum(np.sum(masked_spec_pol, axis=0), axis=0)        
-        rel_indices = np.argwhere(theta_spec>0.1*np.max(theta_spec)).transpose()[0]        
+        rel_indices = np.argwhere(theta_spec>0.2*np.max(theta_spec)).transpose()[0]        
         theta_rel = theta[rel_indices]
         # k_relevant
         k_min_ind = np.argmin(np.abs(k - kmin))
@@ -676,34 +667,38 @@ class _SpectralAnalysis3d(object):
         ww, kk = np.meshgrid(w_upper, k_rel, indexing='ij')
 
         
+        def get_U_eff(k):
+            Nk = len(k)
+            z = np.linspace(-100,0,100)
+            U = np.exp(0.5*z) + 0.05
+            UU = np.outer(np.ones(Nk), U)
+            kk, zz = np.meshgrid(k, z, indexing='ij')
+            return 2*k*np.sum(UU*np.exp(2*kk*zz), axis=1) * np.abs(z[1]-z[0])
+
+    
         for i in range(0, len(theta_rel)):
             input_spec = rel_spec[:,:,i]#convolutional_filters.apply_Gaussian_blur(rel_spec[:,:,i])
             max_input_spec = np.outer(np.ones(len(w_upper)), np.max(input_spec, axis=0) )
             # filtering relative to the power along w-axis otherwise spectral noise in the center moves the cone to the center
             input_spec = np.where(input_spec>0.1*max_input_spec, input_spec, 0)
-            pow = 0.3
+            pow = 1#0.3
             pow2 = 1
             w_peaks = (np.sum(input_spec**pow * ww**pow2, axis=0)/np.sum(input_spec**pow, axis=0))**(1./pow2)
-            w_matrix[:,i] = savgol_filter(w_peaks, 11, 3)#w_peaks
+            w_matrix[:,i] = savgol_filter(w_peaks, 31, 3)#w_peaks
             
             if plot_it:
+                import pylab as plt
                 scaled_2d = spec_pol[:,k_min_ind:k_max_ind,i]/np.max(spec_pol[:,k_min_ind:k_max_ind,i])
                 #plotting_interface.plot_k_w_spec(k_rel, w_upper, np.log10(scaled_2d).T, extent=[0.03, 0.35, 0.5, 1.9])
                 plotting_interface.plot_k_w_spec(k_rel, w_upper, (input_spec).T, extent=[0.03, 0.35, 0.5, 1.9])
-                plotting_interface.plot(k_rel, w_peaks)
-                plotting_interface.plot(k_rel, savgol_filter(w_peaks, 11, 3))
-                #plotting_interface.plot(k_rel, np.sqrt(k_rel*9.81*np.tanh(k_rel*h)))
+                #plotting_interface.plot(k_rel, w_peaks)
+                #plt.plot(k_rel, w_peaks, 'k-.')
+                plt.plot(k_rel, savgol_filter(w_peaks, 31, 3), 'w')
+                plt.plot(k_rel, np.sqrt(9.81*k_rel) + k_rel*get_U_eff(k_rel)*np.cos(-theta_rel[i]),'--', color='darkorange')
+                #plt.xlim(0.055, 0.085)
+                #plt.ylim(0.65, 0.95)
+                plotting_interface.savefig('images/disp_rel_est_0_detail_above.pdf'.format(i))
                 plotting_interface.show()
-        '''
-        ax = plotting_interface.plot_k_w_spec(k_rel, theta_rel, (rel_spec[229,:,:]))
-        CS = ax.contour(k_rel, theta_rel, w_matrix.T, origin='lower', levels=[1.18, 1.199, 1.21], colors='green')
-        w_orig_ind = np.argmin(np.abs(w_upper-1.2))
-        out = np.array(CS.allsegs[0][0])
-        plotting_interface.plot_kx_ky_spec(self.kx, self.ky, (half_spec[w_orig_ind,:,:]))
-        x_points = out[:,0]
-        y_points = out[:,1]
-        plotting_interface.plot(x_points*np.cos(y_points), x_points*np.sin(y_points))
-        '''
         return k_rel, theta_rel, w_matrix
 
     def estimate_dispersion_slices(self, h, Umax, kmin=0.04, kmax=0.3, wmin=0.8, wmax=1.8, plot_it=False):
