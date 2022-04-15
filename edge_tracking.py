@@ -58,6 +58,7 @@ class Edge:
         self.data_max = np.max(self.data)
         if len(self.x)>1:
             self.x_len = np.max(self.x) - np.min(self.x)
+        # TODO calc Bx if available
         return self.x_len, self.data_max
         
 
@@ -102,6 +103,78 @@ class Edge:
         t_start_ind = int((self.t_start-t0)/self.dt)
         t_t_inds = t_start_ind + np.arange(0, len(self.x))
         return np.array(t_t_inds), np.array((self.x-x0)/self.dx).astype('int')
+
+    def get_indices_before_breaking(self, mask, x0=0, t0=0):
+        '''
+        return t and x index just before breaking
+        Parameters:
+            input:  
+                mask            int array
+                                0: non-breaking, 1: breaking
+                x0              float
+                                offset of x-postion
+                t0              float
+                                offset of t-position
+            output:
+                t_tracked_inds  int 
+                                time step index of edge track
+                x_tracked       int 
+                                x-position index of edge track
+        '''
+        peak_track_index = 0
+        tis, xis = self.get_track_indices(x0=x0, t0=t0)
+        interval_size = 4
+        Nx = mask.shape[1]
+        for i in range(0, len(tis)):
+            start_ind = np.max([0, xis[i] -interval_size])
+            end_ind = np.min([xis[i] +interval_size, Nx-2])
+            if np.sum(mask[tis[i], start_ind:end_ind]) > 0:
+                peak_track_index = i - 1
+                i = len(tis)
+        if peak_track_index <= 0:
+            return None, None # no point before breaking
+        else:
+            t_start_ind = int((self.t_start-t0)/self.dt)
+            x_ind = int((self.x[peak_track_index]-x0)/self.dx)
+            return t_start_ind + peak_track_index, x_ind
+
+            
+
+    def get_indices_first_breaking(self, mask, x0=0, t0=0):
+        '''
+        return t and x index of the first breaking point
+        Parameters:
+            input:  
+                mask            int array
+                                0: non-breaking, 1: breaking
+                x0              float
+                                offset of x-postion
+                t0              float
+                                offset of t-position
+            output:
+                t_tracked_inds  int 
+                                time step index of edge track
+                x_tracked       int 
+                                x-position index of edge track
+        '''
+
+        peak_track_index = 0
+        tis, xis = self.get_track_indices(x0=x0, t0=t0)
+        interval_size = 4
+        Nx = mask.shape[1]
+        for i in range(0, len(tis)):
+            start_ind = np.max([0, xis[i] -interval_size])
+            end_ind = np.min([xis[i] +interval_size, Nx-2])
+            if np.sum(mask[tis[i], start_ind:end_ind]) > 0:
+                peak_track_index = i 
+                i = len(tis)
+        if peak_track_index <= 0:
+            return None, None # no point before breaking
+        else:
+            t_start_ind = int((self.t_start-t0)/self.dt)
+            x_ind = int((self.x[peak_track_index]-x0)/self.dx)
+            return t_start_ind + peak_track_index, x_ind
+
 
     def is_breaking(self):
         '''
@@ -442,8 +515,58 @@ class EdgeTracker:
             ids = self.ids_breaking_edges
         else:
             ids = np.array(self.ids_breaking_edges)[id_list_of_interest]
-        return self.plot_specific_tracks_and_mark_breaking(data, mask, label, ids, N, x_extent=x_extent, dt_plot=dt_plot)            
+        return self.plot_specific_tracks_and_mark_breaking(data, mask, label, ids, N, x_extent=x_extent, dt_plot=dt_plot)  
 
+    def get_indices_before_breaking(self, mask, id_list_breaking_tracks):
+        '''
+        return indices of edges just before breaking
+
+        Parameters:
+        -----------
+            input:
+                    id_list_breaking_tracks         int list
+                                                    indices of tracks that include breaking
+            output:
+                    t_inds                          int list
+                                                    t-indices to define before breaking
+                    x_inds                          int list
+                                                    x-indices to define before breaking
+        '''
+        t_inds = []
+        x_inds = []
+        for i in range(0, len(id_list_breaking_tracks)):
+            this_edge = self.edges[id_list_breaking_tracks[i]]
+            ti, xi = this_edge.get_indices_before_breaking(mask, self.x[0], self.t[0])
+            if not ti is None:
+                t_inds.append(ti)
+                x_inds.append(xi)
+        return t_inds, x_inds
+
+
+    def get_indices_first_breaking(self, mask, id_list_breaking_tracks):
+        '''
+        return indices of edges just first breaking
+
+        Parameters:
+        -----------
+            input:
+                    id_list_breaking_tracks         int list
+                                                    indices of tracks that include breaking
+            output:
+                    t_inds                          int list
+                                                    t-indices to define first breaking
+                    x_inds                          int list
+                                                    x-indices to define first breaking
+        '''
+        t_inds = []
+        x_inds = []
+        for i in range(0, len(id_list_breaking_tracks)):
+            this_edge = self.edges[id_list_breaking_tracks[i]]
+            ti, xi = this_edge.get_indices_first_breaking(mask, x0=self.x[0], t0=self.t[0])
+            if not ti is None:
+                t_inds.append(ti)
+                x_inds.append(xi)
+        return t_inds, x_inds
 
 def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True, high_edge_thresh=3.0, long_edge_thresh=200):
     '''
