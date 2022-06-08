@@ -2,6 +2,7 @@ import numpy as np
 from wave_tools import find_peaks, fft_interface, grouping
 from help_tools import plotting_interface, convolutional_filters
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
 
 from skimage.feature import canny
 from skimage.filters import gaussian
@@ -123,10 +124,10 @@ class Edge:
         '''
         peak_track_index = 0
         tis, xis = self.get_track_indices(x0=x0, t0=t0)
-        interval_size = 4
+        interval_size = 5
         Nx = mask.shape[1]
         for i in range(0, len(tis)):
-            start_ind = np.max([0, xis[i] -interval_size])
+            start_ind = np.max([0, xis[i] ])
             end_ind = np.min([xis[i] +interval_size, Nx-2])
             if np.sum(mask[tis[i], start_ind:end_ind]) > 0:
                 peak_track_index = i - 1
@@ -162,12 +163,16 @@ class Edge:
         tis, xis = self.get_track_indices(x0=x0, t0=t0)
         interval_size = 4
         Nx = mask.shape[1]
-        for i in range(0, len(tis)):
-            start_ind = np.max([0, xis[i] -interval_size])
-            end_ind = np.min([xis[i] +interval_size, Nx-2])
-            if np.sum(mask[tis[i], start_ind:end_ind]) > 0:
-                peak_track_index = i 
-                i = len(tis)
+        start_ind = np.max([0, xis[0]])
+        end_ind = np.min([xis[0] +interval_size, Nx-2])
+        # first track should not be breaking
+        if np.sum(mask[tis[0], start_ind:end_ind]) == 0:    
+            for i in range(1, len(tis)):
+                start_ind = np.max([0, xis[i]])
+                end_ind = np.min([xis[i] +interval_size, Nx-2])
+                if np.sum(mask[tis[i], start_ind:end_ind]) > 0:
+                    peak_track_index = i 
+                    i = len(tis) # stop
         if peak_track_index <= 0:
             return None, None # no point before breaking
         else:
@@ -206,6 +211,81 @@ class Edge:
         ax.set_xlabel(r'$r~[m]$')
         return ax
 
+    def get_trough_peak_trough(self, x, t, data, mask=None, x_extent=200, control_plot=False):
+        '''
+        Get the evolution of trough1, peak trough2  along the track 
+        '''
+
+        t_ind, x_ind = self.get_track_indices(x0=x[0], t0=t[0])
+        peaks = np.zeros(len(t_ind))
+        x_pos_peaks = np.zeros(len(t_ind))
+        troughs1 = np.zeros(len(t_ind))
+        x_pos_troughs1 = np.zeros(len(t_ind))
+        troughs2 = np.zeros(len(t_ind))
+        x_pos_troughs2 = np.zeros(len(t_ind))
+        if not mask is None:
+            track_mask = np.zeros(len(t_ind))
+        else:
+            track_mask = None
+        dt = t[1] - t[0]
+        dx = x[1] - x[0]
+        interval_size = int(x_extent/dx)
+        for i in np.arange(0, len(peaks)):
+            start_ind = np.max([0, x_ind[i] - int(0.5*interval_size)])
+            end_ind = np.min([x_ind[i] + int(0.5*interval_size), len(x)-2])
+            gradfunc = np.gradient(data[t_ind[i], start_ind:end_ind+1])
+            signgrad = np.sign(gradfunc)
+            gradsign = np.gradient(signgrad)
+            trough_indices = start_ind + np.argwhere(gradsign==1).T[0][::2]
+            trough_inds_before_edge = np.argwhere(trough_indices<=x_ind[i])
+            if len(trough_inds_before_edge)>0:
+                trough1_ind = trough_indices[trough_inds_before_edge[-1][0]]
+                trough1_ind = trough1_ind - 1 + np.argmin(data[t_ind[i], trough1_ind-1:trough1_ind+2])
+                x_pos_troughs1[i] = x[trough1_ind]
+                trough1 = data[t_ind[i],trough1_ind]
+                start_ind_cut = trough1_ind
+            else:
+                trough1 = np.nan
+                start_ind_cut = start_ind
+
+            trough_inds_behind_edge = np.argwhere(trough_indices>x_ind[i])
+            if len(trough_inds_behind_edge)>0:
+                trough2_ind = trough_indices[trough_inds_behind_edge[0][0]]
+                trough2_ind = trough2_ind + np.argmin(data[t_ind[i], trough2_ind:trough2_ind+3])
+                x_pos_troughs2[i] = x[trough2_ind]
+                end_ind_cut = trough2_ind
+                trough2 = data[t_ind[i],trough2_ind]
+            else:
+                trough2 = np.nan
+                end_ind_cut = end_ind
+            
+            troughs1[i] = trough1
+            troughs2[i] = trough2
+            peaks[i] = np.max(data[t_ind[i], start_ind_cut:end_ind_cut+1])
+            track_mask[i] = np.sum(mask[t_ind[i], start_ind_cut:end_ind_cut+1])>0
+            peak_indices = np.argmax(data[t_ind[i], start_ind_cut:end_ind_cut+1])
+            x_pos_peaks[i] = x[start_ind_cut+peak_indices]
+            if control_plot:
+                plt.plot(x[start_ind:end_ind+1], data[t_ind[i], start_ind:end_ind+1])
+                plt.plot(x_pos_peaks[i], peaks[i], 'x')
+                plt.plot(x[start_ind:end_ind+1], gradsign)
+                plt.plot(x_pos_troughs1[i], troughs1[i], 'x')
+                plt.plot(x_pos_troughs2[i], troughs2[i], 'x')
+                plt.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'ko')
+                plt.show()
+        '''
+        F_peaks = interp1d(x_pos_peaks, peaks)
+        x_pos_peaks = np.linspace(x_pos_peaks[0], x_pos_peaks[-1], 100)
+        peaks = F_peaks(x_pos_peaks)
+        F_troughs1 = interp1d(x_pos_troughs1, troughs1)
+        x_pos_troughs1 = np.linspace(x_pos_troughs1[0], x_pos_troughs1[-1], 100)
+        troughs1 = F_troughs1(x_pos_troughs1)
+        F_troughs2 = interp1d(x_pos_troughs2, troughs2)
+        x_pos_troughs2 = np.linspace(x_pos_troughs2[0], x_pos_troughs2[-1], 100)
+        troughs2 = F_troughs2(x_pos_troughs2)
+        '''
+        return x_pos_troughs1, troughs1, x_pos_peaks, peaks, x_pos_troughs2, troughs2, track_mask
+
     def plot_track_and_mark_breaking(self, x, t, data, mask, label, x_extent=70, dt_plot=1., cm_name='Blues', ax=None):
         '''
         Plots the evolution along the track and marks where breaking occurs
@@ -226,9 +306,21 @@ class Edge:
             end_ind = np.min([x_ind[i] + int(0.8*interval_size), len(x)-2])
             ax.plot(x[start_ind:end_ind+1], data[t_ind[i], start_ind:end_ind+1], color=colors[i])
             # If there is breaking happening in this time step in the observed interval
+            mask_x_ind = 0
+            for x_breaking in x[start_ind:end_ind+1]:
+                if mask[t_ind[i], start_ind + mask_x_ind]>0:
+                    ax.plot(x_breaking, data[t_ind[i], start_ind+mask_x_ind], 'rx')
+                mask_x_ind = mask_x_ind+1
+            # mask the peak on a breaking wave
+            '''
             if sum(mask[t_ind[i], start_ind:end_ind+1])>0:
                 #first_breaking_ind = start_ind + np.argwhere(mask[t_ind[i], start_ind:end_ind+1]==1)#[-1]
-                ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'rx')#, color=colors[i])
+                data_here = data[t_ind[i], start_ind:end_ind+1]
+                peak_ind = np.argmax(data_here)
+                x_here = x[start_ind:end_ind+1]
+                #ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'rx')#, color=colors[i])
+                ax.plot(x_here[peak_ind], data_here[peak_ind], 'rx')
+            '''
         ax.set_ylabel(label)
         ax.set_xlabel(r'$r~[m]$')
         return ax
@@ -568,7 +660,57 @@ class EdgeTracker:
                 x_inds.append(xi)
         return t_inds, x_inds
 
-def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True, high_edge_thresh=3.0, long_edge_thresh=200):
+    def plot_envelopes(self, data, mask, id_list_of_interest, N=None, extent=200, ax_list=None, show_tracks=False):
+        '''
+        Plot upper envelope and two lower envelopes
+
+        Parameters:
+        -----------
+                    input
+                            mask                float array
+                                                breaking mask
+                            id_list_of_interest int list     
+                                                list of IDs of Tracks that should be plotted
+                            N                   int, optional   
+                                                number of cases to be plotted
+                            extent              float
+                                                extent around edge for searching for the peaks/troughs
+                            ax_list             list of axes 
+                                                optional
+                            show_tracks         bool
+                                                shows an image of the data with the current track marked
+
+                    output  
+                            out_ax_list         list of axes object
+                                                contains one axes object for each plot that was generated
+        '''
+        if id_list_of_interest is None:
+            id_list_of_interest = self.ids_breaking_edges
+        if N is None or N>len(id_list_of_interest):
+            N=len(id_list_of_interest)
+        out_ax_list = []
+        for i in range(0, N):
+            this_edge = self.edges[id_list_of_interest[i]]
+            if ax_list is None:
+                fig, ax = plt.subplots()
+            else:
+                ax = ax_list[i]
+            if show_tracks:
+                ax_tracks = self.plot_image_with_track(data, id_list_of_interest[i])
+                ax_tracks.set_title('ID {0:d}'.format(id_list_of_interest[i]))
+            #ax = this_edge.plot_track_and_mark_breaking(self.x, self.t, data, mask, label, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
+            #x_pos, peaks = this_edge.get_peaks(self.x, self.t, data, x_extent=extent)
+            x_pos_troughs1, troughs1, x_pos_peaks, peaks, x_pos_troughs2, troughs2, track_mask= this_edge.get_trough_peak_trough(self.x, self.t, data, mask, x_extent=extent)
+            ax.plot(x_pos_peaks, peaks)
+            ax.plot(x_pos_peaks, np.ma.masked_array(peaks, 1-track_mask), 'rx')
+            ax.plot(x_pos_troughs1, troughs1)
+            ax.plot(x_pos_troughs2, troughs2)
+            #ax.plot(x_pos_peaks, track_mask)
+            out_ax_list.append(ax)
+        return out_ax_list
+
+
+def get_EdgeTracker(x, t, data, mask, max_edge_dist, sign, cmax=15, filter_input=True, high_edge_thresh=3.0, long_edge_thresh=200):
     '''
     Creates and instance of edge Tracker and tracks all edges and returns the instance
 
@@ -585,6 +727,8 @@ def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True,
                         breaking mask
                 max_edge_dist float
                         maximum distance from edge to wave breaking along x-axis
+                sign    signed int
+                        1 for Micha, -1 for Pato        
                 cmax    float
                         maximum crest speed
                 filter_input bool
@@ -592,8 +736,8 @@ def get_EdgeTracker(x, t, data, mask, max_edge_dist, cmax=15, filter_input=True,
     '''
     if filter_input:
         #input = (convolutional_filters.apply_Gaussian_blur(data))
-        input = gaussian(data, sigma=1.0)
-        data = np.gradient(convolutional_filters.apply_edge_detection(input), axis=1)
+        input = gaussian(data, sigma=3.0)
+        data = sign*np.gradient(convolutional_filters.apply_edge_detection(input), axis=1)
     pt = EdgeTracker(x, t, data[0,:], max_edge_dist, mask0=mask[0,:], cmax=cmax, high_edge_thresh=high_edge_thresh, long_edge_thresh=long_edge_thresh)
     for i in range(1, len(t)):
         pt.track_edges(t[i], data[i,:], mask[i,:])

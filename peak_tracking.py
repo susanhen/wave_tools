@@ -1,7 +1,8 @@
 import numpy as np
-from wave_tools import find_peaks, fft_interface, grouping
+from wave_tools import find_peaks, fft_interface, grouping, breaking_layers
 from help_tools import plotting_interface
 from scipy.signal import hilbert as hilbert
+from skimage.measure import block_reduce
 
 
 
@@ -613,8 +614,8 @@ class PeakTracker:
         Parameters:
         -----------
                     input
-                            L           float
-                                        extent in x-direction of breaking wave
+                            eta         float array
+                                        2d surface elevation field
                     output
                             mask        int array
                                         mask: 0: not breaking 1:breaking
@@ -636,6 +637,69 @@ class PeakTracker:
                     l = l+1
                 mask[t_inds[i], x_ind_start:x_ind_stop] = 1
         return mask
+
+
+
+    def get_breaking_tilt_and_mask(self, eta, H, polarization, plot_it):
+        '''
+        return a the tilt-based basis for backscatter in the breaking region and the mask that 
+        marks areas of wave breaking by one, using tilt to determine wave size.
+
+        Parameters:
+        -----------
+                    input
+                            eta         float array
+                                        2d surface elevation field
+                            H           float
+                                        elevation of the radar antenna above the mean level
+                            polarization    string
+                                        'HH' or 'VV'
+                            plot_it     bool
+                                        if True plotting of breaking wave with breaking layers
+                    output
+                            mask        int array
+                                        mask: 0: not breaking 1:breaking
+                                        
+        '''
+        mask = np.zeros((self.Nt, self.Nx), dtype=int)
+        tilt_basis = np.zeros((self.Nt, self.Nx), dtype=int)
+        for peak_ID in self.ids_breaking_peaks:
+            this_peak = self.peaks[peak_ID]
+            t_inds, x_inds = this_peak.get_breaking_indices(t0=self.t[0], x0=self.x[0])
+            for i in range(0, len(t_inds)):
+                control = True
+                x_ind_stop = x_inds[i]
+                l = 0
+                while control == True:
+                    x_ind_start = x_inds[i] - l
+                    tilt = np.arctan2(eta[t_inds[i], x_ind_start] - eta[t_inds[i], x_ind_start-1], this_peak.dx)
+                    if tilt <= 0.1:
+                        control = False
+                    l = l+1
+                mask[t_inds[i], x_ind_start:x_ind_stop] = 1
+                if (x_ind_stop - x_ind_start) > 1:
+                    Ninterpolate = 10
+                    N_here = (x_ind_stop - x_ind_start)
+                    N_here_fine = N_here * Ninterpolate
+                    x_here_fine = np.linspace(self.x[x_ind_start], self.x[x_ind_stop], N_here_fine)
+                    eta_here = eta[t_inds[i], x_ind_start:x_ind_stop]
+                    amp = np.max(eta_here) - np.min(eta_here)
+                    if plot_it:
+                        import pylab as plt
+                        plt.figure()
+                        plt.plot(x_here_fine[::Ninterpolate], eta_here, color='darkblue', label=r'$\eta$')
+                    
+                    y0 = np.min(eta_here)
+                    tilt_basis_here = breaking_layers.accumulated_tilt_basis(x_here_fine, amp, H, y0, polarization='VV', plot_it=plot_it)
+                    tilt_basis_here = block_reduce(tilt_basis_here, (Ninterpolate,), np.max)
+                    tilt_basis[t_inds[i], x_ind_start:x_ind_stop] = tilt_basis_here
+                    if plot_it:
+                        plt.plot(x_here_fine[::Ninterpolate], tilt_basis_here, 'g--', label=r'tilt_basis')
+                        plt.legend()
+                        plt.savefig('layers.pdf', bbox_inches='tight')
+                        plt.show()
+        return tilt_basis, mask
+
 
     def get_breaking_crest_speeds_fixed_L(self, L):
         '''
@@ -663,28 +727,34 @@ class PeakTracker:
                 speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
         return speeds
 
-    def get_breaking_crest_speeds(self, eta):
+    def get_breaking_crest_speeds(self, eta, vel, N_extend=10):
         '''
-        This function defines the speed of the particles in areas of breaking.
-        The speed is defined as the crest speed
+        This function defines the speed of the particles.
+        At breaking the speed is defined as the crest speed if there are orbital velocities greater than crest speed 
+        their value is alternated with the crest speed.
+        Outside breaking, orbital velocitites are used.
 
         Parameters:
         -----------
                     input       
-                            L       float
+                            eta     float
                                     extent in x-direction of breaking wave
+                            vel         float array
+                                        2d surface velocity
+                            N_extend    int
+                                        number of points by which velocities after the peak are evaluated
                     output
                             speeds  float array
                                     crest speed of the waves provided where wave breaking occurs, otherwise 0
         '''
-        speeds = np.zeros((self.Nt, self.Nx))
+        speeds = vel.copy()
         for peak_ID in self.ids_breaking_peaks:
             this_peak = self.peaks[peak_ID]
             c = this_peak.get_c()
             t_inds, x_inds = this_peak.get_breaking_indices(t0=self.t[0], x0=self.x[0])
             for i in range(0, len(t_inds)):
                 control = True
-                x_ind_stop = x_inds[i]
+                x_ind_stop = x_inds[i] 
                 l = 0
                 while control == True:
                     x_ind_start = x_inds[i] - l
@@ -692,7 +762,13 @@ class PeakTracker:
                     if tilt <= 0.1:
                         control = False
                     l = l+1
-                speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
+                x_ind_stop = x_ind_stop +  np.argwhere(vel[t_inds[i], x_ind_stop:]<np.abs(c[i]))[0][0]
+                if x_ind_stop-x_ind_start > 2:
+                    vel_max = np.max(vel[t_inds[i], x_ind_start:x_ind_stop])
+                    speeds[t_inds[i], x_ind_start:x_ind_stop][::2] = -c[i]
+                    speeds[t_inds[i], x_ind_start+1:x_ind_stop][::2] = vel_max
+                else:
+                    speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
         return speeds
 
     def get_upper_envelope(self, peakID, eta, x_max_dist=10):

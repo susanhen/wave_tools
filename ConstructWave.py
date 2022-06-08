@@ -16,6 +16,7 @@ from scipy.special import gamma as gamma_func
 from wave_tools import surface_core
 from wave_tools import shoaling_1d
 import h5py
+from scipy.integrate import simpson
 
 
 
@@ -200,8 +201,7 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
-    dz = np.abs(z[0] - z[1])
-    Uk = 2*kk*np.sum(U*np.exp(np.outer(2*kk,z)), axis=1).reshape(kk.shape)*dz
+    Uk = 2*kk*simpson(U*np.exp(np.outer(2*kk,z)), z, axis=1).reshape(kk.shape)
     # TODO: write a test for this program... just visualize the dispersion relation
     ww = kk*Uk*np.cos(th-psi) + np.sqrt(kk*g*np.tanh(kk*h))
     kx = kk*np.cos(th)
@@ -491,7 +491,7 @@ def shoaling_case(surf_name='shoaling_surface', save=False):
     if save:
         fn = '../../Data/SimulatedWaves/shoaling_windsea_res{0:1.1f}_dt{1:1.1f}_T{2:d}_U0_surf3d.hdf5'.format(dx, dt, T)
         surf.save(fn)
-        surf.add_wave_parameters_to_file(fn, Hs, Tp, gamma, theta_mean, smax, h)
+        surf.add_wave_parameters_to_file(fn, Hs, Tp, gamma, theta_mean, smax, b.h)
     return surf
 
 def shoaling_1D(dx, t, Tp, N_f, surfname = 'surfprofile',
@@ -599,7 +599,9 @@ if __name__=='__main__':
     x = np.arange(-250, 250, dx)
     y = np.arange(500, 1000, dy)
     #surf3d = JonswapWave3D(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h)
-    z = np.linspace(-100,0,100)
+   
+   
+   ,0,100)
     U = np.exp(0.5*z) + 0.05
     psi = 0
     fn = '../../Data/SimulatedWaves/shearing_curr_res_{0:1.1f}_dt_{1:1.1f}_T_{2:d}_U_exp(0.5z)+0.05_surf3d.hdf5'.format(dx, dt, T)
