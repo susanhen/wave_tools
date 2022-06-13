@@ -474,6 +474,19 @@ class Surface(object):
             self.etaND.x = self.x
             self.etaND.y = self.y
 
+    def get_r(self):
+        if self.ND==1:
+            return np.abs(self.x)
+        if self.ND==2:
+            x, y = self.x, self.y
+            xx, yy = np.meshgrid(x, y, indexing='ij')
+            return np.sqrt(xx**2+yy**2)
+        if self.ND==3:
+            x, y = self.x, self.y
+            xx, yy = np.meshgrid(x, y, indexing='ij')
+            return np.sqrt(xx**2+yy**2)
+
+
     def copy2newgrid(self, name, new_grid):
         if type(new_grid)!=list:
             if self.ND!=1:
@@ -662,8 +675,8 @@ class Surface(object):
 
     def get_illumination_function(self, H):
         '''
-        Return illumination function (shadows=0), where shadowing is 
-        calculated along given axis
+        Return illumination function (shadows=0),
+
         Parameters:
         -----------
         input
@@ -675,8 +688,8 @@ class Surface(object):
 
     def get_illuminated_surface(self, name, H):
         '''
-        Return illuminated surface (shadows=0), where shadowing is 
-        calculated along given axis
+        Return illuminated surface (shadows=0), 
+
         Parameters:
         -----------
         input
@@ -688,10 +701,52 @@ class Surface(object):
         illumination_function = self.etaND.get_illumination_function(H)     
         return Surface(name, illumination_function*self.eta.copy(), self.grid)  
 
+    def get_local_incidence_angle_with_shadowing(self, H, approx=False):
+        theta_l = self.etaND.get_local_incidence_angle(H, approx)
+        illumination_function = self.etaND.get_illumination_function(H) 
+        return illumination_function*theta_l 
+
     def get_local_incidence_angle_with_shadowing_surface(self, name, H, approx=False):
+        '''
+        Return illuminated local incidence angle (shadows=0), 
+
+        Parameters:
+        -----------
+        input
+                name    string
+                        define name for shadwoing mask object
+                H       float
+                        height of radar  
+        '''
         theta_l = self.etaND.get_local_incidence_angle(H, approx)
         illumination_function = self.etaND.get_illumination_function(H) 
         return Surface(name, illumination_function*theta_l, self.grid)  
+
+    def get_radar_image(self, H, polarization, logAmp=True, approx=False, toFile=False, fn=''):
+        '''
+        Get radar image based on Rees (p. 216) Eq. 9.4
+        with sigma_0 (p. 55) Eq. 3.51
+        '''
+        theta_l = self.etaND.get_local_incidence_angle(H, approx=False)
+        illumination_function = self.etaND.get_illumination_function(H) 
+        r = self.get_r()
+        if polarization == 'HH':
+            R = np.cos(theta_l)**2/r**2
+        elif polarization == 'VV':
+            R = np.abs(1+np.sin(theta_l)**2) * np.cos(theta_l)/r**2
+        else:
+            print('\nError: wrong input argrument for polarization, <{0:s}> is not implemented.'.format(polarization))
+            return None
+        R = R*illumination_function
+        R = np.where(R<0, 0, R)
+        if logAmp:
+            R = np.log10(R+1)
+        if toFile:
+            hf = h5py.File(fn, 'a')
+            hf.create_dataset('rad_im_{0:d}_{1:s}'.format(int(H), polarization), data=R)
+            hf.close()
+        return R
+
         
     def eta_at_xi(self, xi, y_sub=None, z_sub=None):
         '''

@@ -228,6 +228,8 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     for i in range(0, Nt):
         phase = np.outer((np.cos(th)*kk).flatten(), xx.flatten() ) + np.outer((np.sin(th)*kk).flatten(), yy.flatten()) - np.outer(t[i]*ww, np.ones(Nx*Ny))
         eta[i,:,:] = (np.dot(a1, np.cos(phase)) + np.dot(a2, np.sin(phase))).reshape((Nx, Ny))
+        plotting_interface.plot_3d_as_2d(x, y, eta[i,:,:])
+        plotting_interface.show()
         if save_alongside:
             eta_dset[i,:,:] = eta[i,:,:]
     surf = surface_core.Surface('jonswap', eta, [t, x, y]) 

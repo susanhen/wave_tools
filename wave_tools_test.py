@@ -301,6 +301,7 @@ class SeaSurface(unittest.TestCase):
         #retrieved_surf.plot_3d_surface()
         plt.show()
 
+    '''
     def test_shoaling_1d(self):
         ti = np.array([1])
         dx = 0.5
@@ -341,11 +342,34 @@ class SeaSurface(unittest.TestCase):
         phase = np.array([np.random.uniform()*np.pi*2])
         zetat += a*np.abs(np.sqrt(Cg0x/Cgx))*np.cos(phase+w*ti+ksh)
 
-        bc = shoaling_1d.Bathymetry(x, bathy_filename=0, test=True)
+        bc = shoaling_1d.Bathymetry(x, bathy_filename=None)
+        bc.H = -b
         test = shoaling_1d.SpectralRealization(0, 0, 0, 1, dx, test=True, phase=phase)
         zetac = test.invert(bc, np.array([0, 1, 2]), x)
         for i in range(0, len(zetac)):
             self.assertAlmostEqual(zetat[i], zetac[1,i])
+    '''
+
+    def test_surface_core_radar_image(self):
+        self.surf2d.replace_grid([self.x, self.y+200])
+        eta = self.surf2d.eta
+        H = 10
+        HH_image_10 = self.surf2d.get_radar_image(H, 'HH')  
+        VV_image_10 = self.surf2d.get_radar_image(H, 'VV')   
+        H = 28
+        HH_image_28 = self.surf2d.get_radar_image(H, 'HH')  
+        VV_image_28 = self.surf2d.get_radar_image(H, 'VV')    
+        H = 45
+        HH_image_45 = self.surf2d.get_radar_image(H, 'HH')  
+        VV_image_45 = self.surf2d.get_radar_image(H, 'VV')      
+        plotting_interface.plot_surf_x_y(self.x, self.y, eta)
+        plotting_interface.plot_surf_x_y(self.x, self.y, HH_image_10)
+        plotting_interface.plot_surf_x_y(self.x, self.y, VV_image_10)
+        plotting_interface.plot_surf_x_y(self.x, self.y, HH_image_28)
+        plotting_interface.plot_surf_x_y(self.x, self.y, VV_image_28)
+        plotting_interface.plot_surf_x_y(self.x, self.y, HH_image_45)
+        plotting_interface.plot_surf_x_y(self.x, self.y, VV_image_45)
+        plotting_interface.show()
 
 
 
