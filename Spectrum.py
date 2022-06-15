@@ -1,7 +1,7 @@
 import numpy as np
 from help_tools import plotting_interface, polar_coordinates
 from wave_tools import surface_core, fft_interface, dispersionRelation
-from radar_tools import dispersion_filter
+
 from scipy.ndimage import gaussian_filter
 import scipy
 
@@ -117,6 +117,7 @@ class _Spectrum3d:
         spec_pol = np.abs(spec_pol)
         
         # dispersion filter
+        from radar_tools import dispersion_filter
         mask = dispersion_filter.w_k_theta_filter(w_upper, k, theta, Umax, h, w_min=0.6)
         masked_spec_pol = mask*spec_pol
         #masked_spec_pol = spec_pol
