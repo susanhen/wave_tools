@@ -1,7 +1,6 @@
 import numpy as np
 from wave_tools import surface_core, fft_interface, dispersionRelation
 from help_tools import plotting_interface, polar_coordinates, convolutional_filters, moving_average
-from radar_tools import dispersion_filter, filter_core
 import functools
 import operator
 import scipy
@@ -273,6 +272,8 @@ class _SpectralAnalysis2d(object):
         print('ha')
 
     def get_disp_filtered_spec(self, U, h, filter_width_up, filter_width_down, filter_width_axis, first_axis_k):
+
+        from radar_tools import dispersion_filter, filter_core
         if first_axis_k==True:
             disp_filt = dispersion_filter.k_w_filter(self.Nx, self.Ny, U, h, self.kx, self.ky, filter_width_up, filter_width_down, filter_width_axis, N_fine=2000)                    
             return SpectralAnalysis(disp_filt*self.coeffs.copy(), disp_filt*self.spectrum.copy(), [self.kx, self.ky])            
@@ -648,6 +649,8 @@ class _SpectralAnalysis3d(object):
         spec_pol = np.abs(spec_pol)
         
         # dispersion filter
+
+        from radar_tools import dispersion_filter, filter_core
         mask = dispersion_filter.w_k_theta_filter(w_upper, k, theta, Umax, h, w_min=0.6)
         masked_spec_pol = mask*spec_pol
         #masked_spec_pol = spec_pol
