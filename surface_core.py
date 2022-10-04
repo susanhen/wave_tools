@@ -1235,7 +1235,8 @@ class spacetempSurface(object):
     def get_illumination_function_relaxed(self, H, relaxation_factor=1):
         # Assuming that spatial dimension is along the radar beam
         r = np.outer(np.ones(self.Nt), np.abs(self.x))
-        radar_point_angle = np.arctan2(r, (H - self.eta))        
+        radar_point_angle = 10*np.arctan2(r, (H - self.eta)) 
+        radar_point_angle -= np.mean(radar_point_angle)
         illumination = np.ones(r.shape)
         
         max_dist = 30
@@ -1244,17 +1245,39 @@ class spacetempSurface(object):
             start_i = np.max([0, i-max_dist])
             illumination[:,i] = np.min(np.outer(relaxation_factor*radar_point_angle[:,i], np.ones(i-start_i)) > radar_point_angle[:,start_i:i], axis=1).flatten()
         '''
+        '''
         for i in range(1, self.Nx):
             start_i = np.max([0, i-max_dist])
-            illumination[:,i] = 1-np.sum(np.outer(relaxation_factor*radar_point_angle[:,i], np.ones(i-start_i)) < radar_point_angle[:,start_i:i], axis=1)/(i-start_i)
+            #illumination[:,i] = 1-np.sum(np.outer(relaxation_factor*radar_point_angle[:,i], np.ones(i-start_i)) < radar_point_angle[:,start_i:i], axis=1)/(i-start_i)
+            max_diff = np.max( (radar_point_angle[:,start_i:i] - np.outer(radar_point_angle[:,i], np.ones(i-start_i)) ) , axis=1)
+            shad_portion = r[:,i]/30*np.where(max_diff<0, 0, max_diff)
+            shad_portion = np.where(shad_portion>1, 1, shad_portion)
+            illumination[:,i] = 1-shad_portion
+        '''
+
+
+        for i in range(0,self.Nx-1): 
+            illumination[:,i+1:] *= np.outer(radar_point_angle[:,i], np.ones(self.Nx-i-1)) < radar_point_angle[:,i+1:]    
+        
+        diag = np.zeros(self.Nx)
+        diag_length = 10
+        diag[self.Nx//2-1:self.Nx//2+diag_length-1] = np.linspace(1,0,diag_length) 
+        from help_tools import convolution
+        illumination = convolution.convolve2d_one_axis(diag, illumination, axis=1)
         #'''
         fig, ax = plt.subplots(3)
         ax[0].plot(self.eta[10,:])
         ax[0].plot(illumination[10,:])
+        ax0b = ax[0].twiny()
+        ax0b.plot((radar_point_angle[10,:]), 'r')
         ax[1].plot(self.eta[40,:])
         ax[1].plot(illumination[40,:])
+        ax1b = ax[1].twiny()
+        ax1b.plot((radar_point_angle[40,:]), 'r')
         ax[2].plot(self.eta[80,:])
         ax[2].plot(illumination[80,:])
+        ax2b = ax[2].twiny()
+        ax2b.plot((radar_point_angle[80,:]), 'r')
         plt.show()
         #'''
         return illumination 

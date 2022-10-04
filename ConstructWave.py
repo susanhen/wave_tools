@@ -202,6 +202,10 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
     Uk = 2*kk*simpson(U*np.exp(np.outer(2*kk,z)), z, axis=1).reshape(kk.shape)
+    plt.figure()
+    plt.plot(k, Uk)
+    plt.plot(k, 2*k*simpson(U*np.exp(2*np.outer(k, z)),z,axis=1))
+    plt.show()
     # TODO: write a test for this program... just visualize the dispersion relation
     ww = kk*Uk*np.cos(th-psi) + np.sqrt(kk*g*np.tanh(kk*h))
     kx = kk*np.cos(th)

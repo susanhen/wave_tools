@@ -265,6 +265,20 @@ class Peak:
             if self.Bx[i]>self.threshold:
                 ax.plot(x[x_ind[i]], data[t_ind[i], x_ind[i]], 'rx')#, color=colors[i])
         return ax
+
+    def plot_crest_speed_track(self, ax=None, mark_breaking=True, t0=0, x0=0):
+        if ax is None:
+            import pylab as plt
+            fig, ax = plt.subplots()
+        c = self.get_c()
+        ax.plot(self.x, -c)
+        if mark_breaking:
+            for ind in range(0, len(c)):
+                if self.Bx[ind]>self.threshold:
+                    ax.plot(self.x[ind], -c[ind], 'rx')
+        ax.set_xlabel(r'$r~[\mathrm{m}]$')
+        ax.set_ylabel(r'$c~[\mathrm{ms}^{-1}]$')
+        return ax
       
 class PeakTracker:
     def __init__(self, x, t, eta0, vel0, cmax, high_peak_thresh=3.0, long_peak_thresh=300):
@@ -524,7 +538,7 @@ class PeakTracker:
             id_list_of_interest = np.array(self.ids_breaking_peaks)[id_list_of_interest]
         return self.plot_evolution_of_specific_tracks(data, id_list_of_interest, N=N, x_extent=x_extent, ax_list=ax_list, cm_name=cm_name, dt_plot=dt_plot, envelope=envelope, env_x_max_dist_front=env_x_max_dist_front, env_x_max_dist_back=env_x_max_dist_back)
 
-    def plot_specific_tracks_and_mark_breaking(self, data, id_list_of_interest, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None, envelope=False, env_x_max_dist_front=20, env_x_max_dist_back=20):
+    def plot_specific_tracks_and_mark_breaking(self, data, id_list_of_interest, N=None, x_extent=50, dt_plot=1., cm_name='Blues', ax_list=None, envelope=False, env_x_max_dist_front=20, env_x_max_dist_back=20, plot_crest_speed_track=False):
         '''
         Plots the evolution of specific tracks
         
@@ -549,6 +563,8 @@ class PeakTracker:
                                                     if true plot envelope as well
                             env_x_max_dist          float
                                                     maximum distance on x-axis to search for minimum (lower envelope)
+                            plot_crest_track        bool
+                                                    if True: plot tracks of crest speeds
                     output
                             out_ax_list             list
                                                     list of axis of plots
@@ -564,6 +580,8 @@ class PeakTracker:
             else:
                 ax = ax_list[i]
             ax = this_peak.plot_track_and_mark_breaking(self.x, self.t, data, x_extent=x_extent, dt_plot=dt_plot, cm_name=cm_name, ax=ax)
+            if plot_crest_speed_track:
+                this_peak.plot_crest_speed_track(t0=self.t[0], x0=self.x[0])
             if envelope:
                 x_env, y_env = self.get_upper_envelope(this_peakID, data, 10)
                 ax.plot(x_env, y_env, 'r')
@@ -574,12 +592,12 @@ class PeakTracker:
             out_ax_list.append(ax)
         return out_ax_list
 
-    def plot_breaking_tracks_and_mark_breaking(self, data, id_list_of_interest=None, N=None, x_extent=70, dt_plot=1.):
+    def plot_breaking_tracks_and_mark_breaking(self, data, id_list_of_interest=None, N=None, x_extent=70, dt_plot=1., plot_crest_speed_track=False):
         if id_list_of_interest ==None:
             ids = self.ids_breaking_peaks
         else:
             ids = np.array(self.ids_breaking_peaks)[id_list_of_interest]
-        return self.plot_specific_tracks_and_mark_breaking(data, ids, N, x_extent=x_extent, dt_plot=dt_plot)   
+        return self.plot_specific_tracks_and_mark_breaking(data, ids, N, x_extent=x_extent, dt_plot=dt_plot, plot_crest_speed_track=plot_crest_speed_track)   
 
 
     def get_breaking_mask_fixed_L(self, L):
@@ -913,6 +931,8 @@ class PeakTracker:
             ax.set_ylabel(ylabel)
             ax.legend()
         return ax
+
+
 
 
 def get_PeakTracker(x, t, eta, vel, cmax=15, max_dist=30, high_peak_thresh=3, long_peak_thresh=300, plot_tracking=False, breaking_mask=None, smoothen_input=False):
