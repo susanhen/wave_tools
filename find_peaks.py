@@ -1,33 +1,40 @@
-from numpy import diff, where, argmax, sign, mod, zeros, bitwise_and, transpose
+import numpy as np
 
 def _find_peaks1d(data, method='zero_crossing', return_values=False, peak_threshold=0):
-    if method =='zero_crossing':
-        ind0 = where(diff(sign(data))!=0)[0]  
-        N = len(ind0)-1
-        extrema_indices = zeros(N, dtype=int)
-        classify_intervals = zeros(N, dtype=int)
-        for i in range(0, N):
-            extrema_indices[i] = ind0[i] + argmax(data[ind0[i]:ind0[i+1]+1])        
-            classify_intervals[i] = sum(data[ind0[i]+1:ind0[i+1]+1]<0)==0 # count number of negative values in the interval, the first may be negative though correct => excluded
-        take = where(classify_intervals==1)[0]
-        peak_indices = extrema_indices[take]
+    shift = np.mean(data)
+    data -= shift
+    indicator = np.where(np.diff(np.sign(data))!=0)
+    if np.sum(indicator) > 0:
+        if method =='zero_crossing':
+            ind0 = np.where(np.diff(np.sign(data))!=0)[0]  
+            N = len(ind0)-1
+            extrema_indices = np.zeros(N, dtype=int)
+            classify_intervals = np.zeros(N, dtype=int)
+            for i in range(0, N):
+                extrema_indices[i] = ind0[i] + np.argmax(data[ind0[i]:ind0[i+1]+1])        
+                classify_intervals[i] = sum(data[ind0[i]+1:ind0[i+1]+1]<0)==0 # count number of negative values in the interval, the first may be negative though correct => excluded
+            take = np.where(classify_intervals==1)[0]
+            peak_indices = extrema_indices[take]
         
-    elif method =='all_peaks':
-        peak_indices = where(diff(sign(diff(data)))==-2)[0] + 1
+        elif method =='all_peaks':
+            peak_indices = np.where(np.diff(np.sign(np.diff(data)))==-2)[0] + 1
+        else:
+            print('Your method name is not implemented, check spelling')
+            return 0  
+        # in bad data (measurements with jumps, things may go wrong (eg. for all_peaks) and the negative peaks are sorted away        
+        #take = where(data[peak_indices]>0)
+        #peak_indices = peak_indices[take]
+
+        # remove peaks below threshold
+
+        take = np.where(data[peak_indices]>peak_threshold)
+        peak_indices = peak_indices[take]
+        if return_values:
+            return data[peak_indices] + shift
+        return peak_indices
     else:
-        print('Your method name is not implemented, check spelling')
-        return 0        
-    # in bad data (measurements with jumps, things may go wrong (eg. for all_peaks) and the negative peaks are sorted away        
-    #take = where(data[peak_indices]>0)
-    #peak_indices = peak_indices[take]
-
-    # remove peaks below threshold
-
-    take = where(data[peak_indices]>peak_threshold)
-    peak_indices = peak_indices[take]
-    if return_values:
-        return data[peak_indices]
-    return peak_indices
+        print('No peaks found!')
+        return np.array([])
         
         
 def find_peaks(data, axis=0, method='zero_crossing', return_values=False, peak_threshold=0):
@@ -57,12 +64,12 @@ def find_peaks(data, axis=0, method='zero_crossing', return_values=False, peak_t
         print('Error: The method is not implemented for data.shape>2')
         return None
     elif len(data_shape)==2:
-        data = transpose(data).flatten()
+        data = np.transpose(data).flatten()
         N0 = data_shape[0] 
         peak_indices = _find_peaks1d(data, method)
-        peak_indices_basic = mod(peak_indices, data_shape[0])
+        peak_indices_basic = np.mod(peak_indices, N0)
         peak_indices_second = (peak_indices/N0).astype('int')  
-        take = where(bitwise_and(peak_indices_basic>0, peak_indices_basic<N0-1))[0]      # remove line jumps   
+        take = np.where(np.bitwise_and(peak_indices_basic>0, peak_indices_basic<N0-1))[0]      # remove line jumps   
         if axis==0:
             return peak_indices_basic[take], peak_indices_second[take]
         else:
@@ -109,15 +116,15 @@ if __name__=='__main__':
         plt.figure()
         choose = i
         if axis==0:
-            take = where(indt==choose)[0]
-            take2 = where(indt2==choose)[0]
+            take = np.where(indt==choose)[0]
+            take2 = np.where(indt2==choose)[0]
             plt.plot(x, data[:, choose])
             plt.plot(x[indx[take]], data[indx[take], choose], '+')
             #plt.plot(x[indx2[take2]], data[indx2[take2], choose], 'x')
 
         else:
-            take = where(indx==choose)[0]
-            take2 = where(indx2==choose)[0]
+            take = np.where(indx==choose)[0]
+            take2 = np.where(indx2==choose)[0]
             plt.plot(t, data[choose,:])
             plt.plot(t[indt[take]], data[choose, indt[take]], '+')
             #plt.plot(t[indt2[take2]], data[choose, indt2[take2]], 'x')
