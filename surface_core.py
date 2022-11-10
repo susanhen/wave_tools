@@ -194,6 +194,7 @@ class _Surface2D(object):
     def get_deta_dy(self):
         deta_dx, deta_dy = np.gradient(self.eta, self.x, self.y)
         return deta_dy
+        
     def plot_3d_surface(self):
         plotting_interface.plot_3d_surf_x_y(self.x, self.y, self.eta)
 
