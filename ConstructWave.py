@@ -80,7 +80,7 @@ def JonswapWave2D_old(x, Tp, Hs, smax, gamma=3.3, h=1000, theta_mean=0.5*np.pi, 
     w = np.sqrt(k*9.81*np.tanh(k*h))
     ji = jonswap.jonswap(w, wp, Hs, h, gamma) 
     #TODO: make sure that kx, ky are returned and that these parameters can be set from here
-    D_cart = spreading.mitsuyatsu_spreading(ji, theta_mean, smax, wp, k)
+    D_cart = spreading.mitsuyasu_spreading(ji, theta_mean, smax, wp, k)
     
     phi = np.exp(1j*(stats.uniform(scale=2*np.pi).rvs((2*N,2*N))-np.pi))
     upper_image=phi[N:,:]*D_cart[N:,:]
@@ -118,7 +118,7 @@ def JonswapWave2D(x, y, Hs, Alpha, gamma, theta_mean, smax):
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
     S = jonswap.jonswap_k(k, kp, Hs, gamma)
-    D = spreading.mitsuyatsu_spreading(k, kp, theta, theta_mean, smax)
+    D = spreading.mitsuyasu_spreading(k, kp, theta, theta_mean, smax)
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
@@ -169,7 +169,7 @@ def JonswapWave3D(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h = 1000):
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
     S = jonswap.jonswap_k(k, kp, Hs, gamma)
-    D = spreading.mitsuyatsu_spreading(k, kp, theta, theta_mean, smax)
+    D = spreading.mitsuyasu_spreading(k, kp, theta, theta_mean, smax)
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
@@ -197,7 +197,7 @@ def JonswapWave3D_shearCurrent(t, x, y, Hs, Alpha, gamma, theta_mean, smax, h, z
     Ntheta = len(theta)
     kp=2*np.pi*Alpha/Hs
     S = jonswap.jonswap_k(k, kp, Hs, gamma)
-    D = spreading.mitsuyatsu_spreading(k, kp, theta, theta_mean, smax)
+    D = spreading.mitsuyasu_spreading(k, kp, theta, theta_mean, smax)
     a_mean = np.sqrt(2*np.outer(S, np.ones(Ntheta)) * D * dk * dtheta)
     xx, yy = np.meshgrid(x, y, indexing='ij')
     kk, th = np.meshgrid(k, theta, indexing='ij')
