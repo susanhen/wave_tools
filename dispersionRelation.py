@@ -42,6 +42,35 @@ def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)):
     return k
 
 
+def calc_wavenumber_no_current_variable_h(w, h, Niter_max=200, eps=10**(-6)): 
+    '''
+    calculate the wave numbers for the provided angular frequency  when there is no current for a range of depths.
+    This method is faster than the one allowing current
+
+    Parameters
+    ----------
+            input
+                    w       float
+                            angular frequency or vector of angular frequencies
+                    h       array
+                            water depth
+            output
+                    k       array
+                            wave number or vector of wave numbers
+    '''  
+    g=9.81     
+    # start
+    ki = w**2/g
+    wt = np.sqrt(g*ki*np.tanh(ki*h))
+    count=0
+    while np.max(np.abs(w - wt))>eps and count<Niter_max:
+        
+        ki = w**2/(g*np.tanh(ki*h))
+        wt = np.sqrt(ki*g*np.tanh(ki*h))                         
+        count = count + 1
+        
+    return ki
+
 def calc_wavenumber(w, h, Ueff, psi, Ntheta, Niter_max=200, eps=10**(-6)): 
     '''
     calculate the wave number for the provided angular frequency or frequencies for the given effective current

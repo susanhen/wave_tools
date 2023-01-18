@@ -3,7 +3,7 @@ from wave_tools import fft_interface
 from scipy.special import gammaln
     
 
-def mitsuyatsu_spreading_old(spec1d, theta_mean, smax, wp, k, h=1000, N_theta=360):
+def mitsuyasu_spreading_old(spec1d, theta_mean, smax, wp, k, h=1000, N_theta=360):
     import polarTransform # no longer present!!
     '''
     Defines a spectral spreading matrix according to mitsuyatsu
@@ -71,7 +71,7 @@ def mitsuyatsu_spreading_old(spec1d, theta_mean, smax, wp, k, h=1000, N_theta=36
     
     return S_cart
 
-def mitsuyatsu_spreading(k, kp, theta, theta_mean, smax):
+def mitsuyasu_spreading(k, kp, theta, theta_mean, smax):
     kk, th = np.meshgrid(k, theta, indexing='ij')
     s = np.where(kk<=kp, smax * (np.sqrt(kk/kp))**5, smax * (np.sqrt(kk/kp))**(-2.5))
     D = (2**(2*s-1))/np.pi * (np.cos((th-theta_mean)/2)**2)**s
@@ -124,7 +124,7 @@ if __name__=='__main__':
     theta = np.linspace(-np.pi, np.pi, 100)
     Alpha = 0.023
     kp = 2*np.pi*Alpha/Hs
-    D = mitsuyatsu_spreading(k, kp, theta, theta_mean, smax)
+    D = mitsuyasu_spreading(k, kp, theta, theta_mean, smax)
     plotting_interface.plot_3d_as_2d(k*10, theta, D)
 
     # asymmetric distribution
