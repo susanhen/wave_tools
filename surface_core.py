@@ -341,6 +341,28 @@ class _Surface3D(object):
     def plot_surf2d_at_ti(self, ti, name, flat=True):
         time_index = np.min(np.abs(self.t-ti))
         self.plot_surf2d_at_index(time_index, name, flat)
+
+    def animate(self, save_it=False, fn='animated_surface.gif'):
+        import matplotlib.pyplot as plt
+        from matplotlib import animation
+        fig, ax = plt.subplots()
+        time_template = 'time = %.1fs'
+        fig_title = fig.suptitle(time_template %0)
+        data0 = self.eta[0,:,:]
+        extent = (self.x[0], self.x[-1], self.y[0], self.y[-1])
+        image_i = ax.imshow(data0, origin='lower', aspect='auto', extent=extent)
+        def init():
+            ax.set_xlabel(r'$x~[\mathrm{m}]$')
+            ax.set_ylabel(r'$y~[\mathrm{m}]$')
+            return image_i
+
+        def update(i):
+            fig_title.set_text(time_template % (i*self.dt))
+            image_i.set_data(self.eta[i,:,:])
+        ani = animation.FuncAnimation(fig, update, frames=np.arange(0,self.Nt), init_func=init, blit=False)
+        if save_it:
+            ani.save(filename=fn)
+        plt.show()
         
     def get_local_incidence_angle(self, H, approx=False):
         theta_l = np.zeros(self.eta.shape)
@@ -560,6 +582,13 @@ class Surface(object):
             self.etaND.plot_3d_as_2d()
         elif self.ND==3:
             self.etaND.plot_surf2d_at_index(time_index, self.name)
+
+    def animate(self):
+        if self.ND<3:
+            print('Warning: animation is only enabled in 3d or time-space')
+        else:
+            self.etaND.animate()
+
 
     def apply_window(self, window):
         if self.window_applied==True:
@@ -865,7 +894,7 @@ class Surface(object):
         
 
 
-def surface_from_file(fn, spaceTime=False):
+def surface_from_file(fn, spaceTime=False, datafield='eta'):
     '''
     Read surface from file and create instance surface from file
     spaceTime True switches a 2 D case with the first dimension being space and the second being time (FIXME)
@@ -873,7 +902,7 @@ def surface_from_file(fn, spaceTime=False):
     hf = h5py.File(fn, 'r')
     name = hf.attrs['name']
     window_applied = hf.attrs['window_applied']
-    eta = np.array(hf.get('eta'))
+    eta = np.array(hf.get(datafield))
     ND = hf.attrs['ND']
     x = np.array(hf.get('x'))
     if np.mod(len(x),2)==0:
