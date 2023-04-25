@@ -435,6 +435,19 @@ class _SpectralAnalysis3d(object):
         #FIXME implement: options of 3d something and slices along different axis, single slices or a bunch, use subspectra in 2D!
         plotting_interface.plot_kx_ky_spec(self.kx, self.ky, np.sum(self.spectrum[self.Nt//2:], axis=0)*self.dw, extent=extent, ax=ax)
 
+    def plot_w_slice(self, at_w, extent, ax=None, dB=None, vmin=None, save=False):
+        '''
+        plots the integrated kx-ky-spectrum and the integrated k-omega-spectrum
+        '''
+        if at_w > 0:
+            i = np.argmin(np.abs(self.w[self.Nt//2:]-at_w))
+            print(at_w, self.w[self.Nt//2+i], i) 
+            plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum[self.Nt//2+i,:,:], extent=extent, ax=ax)
+        else:
+            i = np.argmin(np.abs(self.w[:self.Nt//2]-at_w))
+            print(at_w, self.w[i], i) 
+            plotting_interface.plot_kx_ky_spec(self.kx, self.ky, self.spectrum[i,:,:], extent=extent, ax=ax)
+
     def remove_zeroth(self):
         self.coeffs[self.Nt//2, self.Nx//2, self.Ny//2] = 0
         self.spectrum[self.Nt//2, self.Nx//2, self.Ny//2] = 0  
@@ -1067,6 +1080,28 @@ class SpectralAnalysis(object):
             self.spectrumND.plot(extent, ax)
         elif self.ND==3:
             self.spectrumND.plot(extent, ax)
+
+    def plot_w_slice(self,  at_w, extent=None, ax=None):
+        '''
+        Method for 3D, plot kx-ky spectra at a given w
+
+        Parameters:
+        -----------
+                        input
+                                at_w            float
+                                                angular frequency of choice
+                                extent          array or tuple
+                                                gives corners of kx-ky domain (kx_start, kx_stop, ky_start, ky_stop)
+                                                 default:None
+                                ax              axis
+                                                axis for plotting, default:None
+                        output
+                                ax              axis of plotting
+        '''
+        if self.ND<3:
+            print('Error: method not usable for less then 3 dimensions')
+        else:
+            self.spectrumND.plot_w_slice(at_w, extent, ax)
 
     def plot_orig_disp_rel(self, w, z, Ux, Uy, h, extent=None):
         self.spectrumND.plot_orig_disp_rel(w, z, Ux, Uy, h, extent)

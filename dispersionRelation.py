@@ -24,9 +24,11 @@ def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)):
     '''  
     g=9.81     
     # treat case that w contains zeros
-    w_old = w.copy()
-    chosen_indices = np.argwhere(np.abs(w)>0)
-    w = w_old[chosen_indices]
+    if w is np.array:
+        w_old = w.copy()
+        chosen_indices = np.argwhere(np.abs(w)>0)
+        w = w_old[chosen_indices]
+
     # start
     ki = w**2/g
     wt = np.sqrt(g*ki*np.tanh(ki*h))
@@ -36,9 +38,11 @@ def calc_wavenumber_no_current(w, h, Niter_max=200, eps=10**(-6)):
         ki = w**2/(g*np.tanh(ki*h))
         wt = np.sqrt(ki*g*np.tanh(ki*h))                         
         count = count + 1
-        
-    k = np.zeros(len(w_old))
-    k[chosen_indices] = ki
+    if w is np.array: 
+        k = np.zeros(len(w_old))
+        k[chosen_indices] = ki
+    else:
+        k = ki
     return k
 
 

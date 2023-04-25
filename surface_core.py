@@ -20,6 +20,7 @@ class _Surface1D(object):
         self.eta = eta
         if type(grid)==list:
             self.x = grid[0]
+            print('here', self.x)
         else:
             self.x=grid
         self.N = len(self.x)
@@ -350,7 +351,7 @@ class _Surface3D(object):
         fig_title = fig.suptitle(time_template %0)
         data0 = self.eta[0,:,:]
         extent = (self.x[0], self.x[-1], self.y[0], self.y[-1])
-        image_i = ax.imshow(data0, origin='lower', aspect='auto', extent=extent)
+        image_i = ax.imshow(data0.T, origin='lower', aspect='auto', extent=extent)
         def init():
             ax.set_xlabel(r'$x~[\mathrm{m}]$')
             ax.set_ylabel(r'$y~[\mathrm{m}]$')
@@ -358,7 +359,7 @@ class _Surface3D(object):
 
         def update(i):
             fig_title.set_text(time_template % (i*self.dt))
-            image_i.set_data(self.eta[i,:,:])
+            image_i.set_data(self.eta[i,:,:].T)
         ani = animation.FuncAnimation(fig, update, frames=np.arange(0,self.Nt), init_func=init, blit=False)
         if save_it:
             ani.save(filename=fn)
