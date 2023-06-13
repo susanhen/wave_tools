@@ -404,12 +404,12 @@ class _Surface3D(object):
         return [self.t, x_new[x_ind1:x_ind2:x_spacing], y_new[y_ind1:y_ind2:y_spacing]], eta_new[:, x_ind1:x_ind2:x_spacing, y_ind1:y_ind2:y_spacing]     
 
 
-    def get_surf2d_at_index(self, time_index):
+    def get_surf2d_at_index(self, time_index, name):
         '''
         Returns a 2d surface for the given time index (only 3d surfaces)
         '''
  
-        return Surface('noName', self.eta[time_index,:,:], [self.x, self.y])
+        return Surface(name, self.eta[time_index,:,:], [self.x, self.y])
 
     def get_sub_surface(self, extent, dt_new, dx_new, dy_new):
         if dt_new is not None:

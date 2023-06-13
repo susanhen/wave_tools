@@ -706,15 +706,14 @@ class PeakTracker:
                         import pylab as plt
                         plt.figure()
                         plt.plot(x_here_fine[::Ninterpolate], eta_here, color='darkblue', label=r'$\eta$')
-                    
                     y0 = np.min(eta_here)
                     tilt_basis_here = breaking_layers.accumulated_tilt_basis(x_here_fine, amp, H, y0, polarization='VV', plot_it=plot_it)
                     tilt_basis_here = block_reduce(tilt_basis_here, (Ninterpolate,), np.max)
                     tilt_basis[t_inds[i], x_ind_start:x_ind_stop] = tilt_basis_here
                     if plot_it:
-                        plt.plot(x_here_fine[::Ninterpolate], tilt_basis_here, 'g--', label=r'tilt_basis')
+                        plt.plot(x_here_fine[::Ninterpolate], tilt_basis_here, 'g--', label=r'tilt-basis')
                         plt.legend()
-                        plt.savefig('layers.pdf', bbox_inches='tight')
+                        #plt.savefig('layers.pdf', bbox_inches='tight')
                         plt.show()
         return tilt_basis, mask
 
