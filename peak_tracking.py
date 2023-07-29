@@ -744,7 +744,7 @@ class PeakTracker:
                 speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
         return speeds
 
-    def get_breaking_crest_speeds(self, eta, vel, N_extend=10):
+    def get_breaking_crest_speeds(self, eta, vel, N_extend=10, fact=1.2):
         '''
         This function defines the speed of the particles.
         At breaking the speed is defined as the crest speed if there are orbital velocities greater than crest speed 
@@ -760,6 +760,8 @@ class PeakTracker:
                                         2d surface velocity
                             N_extend    int
                                         number of points by which velocities after the peak are evaluated
+                            fact        float
+                                        multiply creste speed by this value in order to account for increased particle speed that is measured
                     output
                             speeds  float array
                                     crest speed of the waves provided where wave breaking occurs, otherwise 0
@@ -782,10 +784,10 @@ class PeakTracker:
                 x_ind_stop = x_ind_stop +  np.argwhere(vel[t_inds[i], x_ind_stop:]<np.abs(c[i]))[0][0]
                 if x_ind_stop-x_ind_start > 2:
                     vel_max = np.max(vel[t_inds[i], x_ind_start:x_ind_stop])
-                    speeds[t_inds[i], x_ind_start:x_ind_stop][::2] = -c[i]
+                    speeds[t_inds[i], x_ind_start:x_ind_stop][::2] = -fact*c[i]
                     speeds[t_inds[i], x_ind_start+1:x_ind_stop][::2] = vel_max
                 else:
-                    speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
+                    speeds[t_inds[i], x_ind_start:x_ind_stop] = -fact*c[i]
         return speeds
 
     def get_upper_envelope(self, peakID, eta, x_max_dist=10):

@@ -79,9 +79,9 @@ def accumulated_tilt_basis(x, amp, H, y0=0, N_layers_max=9, breaker_type='plungi
         if polarization == 'VV':
             cos_theta_l = cos_loc_inc_angle(layers[i], x, H)
             theta_l = np.arccos(cos_theta_l)
-            a_added += 9./len(layers) * (1+np.sin(theta_l)**2)*cos_theta_l 
+            a_added += 1./len(layers) * (1+np.sin(theta_l)**2)*cos_theta_l 
         else:
-            a_added += 9./len(layers) * cos_loc_inc_angle(layers[i], x, H)**2
+            a_added += 1./len(layers) * cos_loc_inc_angle(layers[i], x, H)**2
 
         
     return a_added
@@ -107,14 +107,15 @@ if __name__=='__main__':
     accum_tilt = accumulated_tilt_basis(x, amp, H, y0, polarization='VV')
     plt.plot(x,y)
     for i in range(0, len(layers)):
-        plt.plot(x, layers[i])
+        plt.plot(x, layers[i], 'k-')
         ai = cos_loc_inc_angle(layers[i], x, H)
         a_added += 1./len(layers) * ai**2
         a_added1 += 1./len(layers) * ai
         a_added2 += 1./len(layers) * ai**4
-    plt.plot(x, a_added, label='pow2')
-    plt.plot(x, a_added1, label='pow1')
-    plt.plot(x, a_added2, label='pow4')
+    plt.plot(x, cos_loc_inc_angle(y, x, H), '--', label='cos(theta_l)')
+    #plt.plot(x, a_added, label='pow2')
+    #plt.plot(x, a_added1, label='pow1')
+    #plt.plot(x, a_added2, label='pow4')
     plt.plot(x, accum_tilt, ':')
     plt.plot(x, a0**2, '--')
     plt.legend()
