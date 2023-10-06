@@ -306,6 +306,7 @@ class PeakTracker:
             peak_index = peak_location_indices[i]
             self.peaks[i] = Peak(t[0], self.x[peak_index], eta0[peak_index], vel0[peak_index], self.dt, self.dx)
             self.active_peaks[i] = peak_index
+        self.track_dict = {}
 
     def breaking_tracker(self):
         self.Nb = 0
@@ -320,7 +321,7 @@ class PeakTracker:
                 self.pc = np.append(self.pc, self.peaks[i].cb)
         self.bindex = np.delete(self.bindex, 0, 0)
 
-    def track_peaks(self, ti, eta, vel, max_dist=30, plot_each_iteration=False): 
+    def track_peaks(self, ti, eta, vel, max_dist=30, plot_each_iteration=True): 
         '''
         find peaks for given data track peaks found
         Old paths are continued or stopped, new paths are added
@@ -362,7 +363,8 @@ class PeakTracker:
                     
                 if new_peak_location_index is None:     
                     self.stop_tracking(peak_ID)           
-                    indices_to_be_removed.append(peak_ID)                    
+                    indices_to_be_removed.append(peak_ID)  
+                    self.track_dict[peak_ID] = peak_location_indices                  
                 else:
                     peak.track(self.x[new_peak_location_index], eta[new_peak_location_index], vel[new_peak_location_index])
                     self.active_peaks[peak_ID] = new_peak_location_index

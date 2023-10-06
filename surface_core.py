@@ -1,5 +1,5 @@
 import numpy as np
-from wave_tools import find_peaks, find_freak_waves, fft_interface, fft_interpolate, peak_tracking
+from wave_tools import find_peaks, find_freak_waves, fft_interface, fft_interpolate, peak_tracking, edge_tracking_new
 from wave_tools import SpectralAnalysis, Spectrum
 import matplotlib.pyplot as plt
 from help_tools import plotting_interface, polar_coordinates
@@ -485,11 +485,14 @@ class Surface(object):
             else:
                 self.x=new_grid
             self.etaND.x = self.x
+            self.etaND.dx = self.x[1]-self.x[0]
         if self.ND==2:
             self.x = new_grid[0]
             self.y = new_grid[1]
             self.etaND.x = self.x
             self.etaND.y = self.y
+            self.etaND.dx = self.x[1]-self.x[0]
+            self.etaND.dx = self.x[1]-self.x[0]
         if self.ND==3:
             self.t = new_grid[0]
             self.x = new_grid[1]
@@ -497,6 +500,9 @@ class Surface(object):
             self.etaND.t = self.t
             self.etaND.x = self.x
             self.etaND.y = self.y
+            self.etaND.dt = self.t[1]-self.t[0]
+            self.etaND.dx = self.x[1]-self.x[0]
+            self.etaND.dy = self.y[1]-self.y[0]
 
     def get_r(self):
         if self.ND==1:
@@ -927,7 +933,7 @@ def surface_from_file(fn, spaceTime=False, datafield='eta'):
             Nt = len(t)
         else:
             Nt = len(t)-1
-        grid = np.array([x[:Nx], t[:Nt]])
+        grid = np.array([x[:Nx], t[:Nt]], dtype=type(x))
         return spacetempSurface(name, eta[:Nt, :Nx], grid, window_applied)
     elif ND==3:
         t = np.array(hf.get('t'))
@@ -1176,6 +1182,8 @@ class spacetempSurface(object):
         self.grid = new_grid
         self.t = new_grid[0]
         self.x = new_grid[1]
+        self.dt = self.t[1]-self.t[0]
+        self.dx = self.x[1]-self.x[0]
 
     def copy2newgrid(self, name, new_grid):
         return spacetempSurface(name, self.eta.copy(), new_grid)
@@ -1417,6 +1425,15 @@ class spacetempSurface(object):
         return msurf, pt
 
 
+
+    def get_peakTracker_with_bmask(self, b_mask, N_max_dist=3, sigma=1, 
+                              low_thresh=1, high_thresh=20, min_track_length=50, Nr_fact=8):
+
+        track_dict = edge_tracking_new.main(self.eta, False, '', 0, sigma, low_thresh, high_thresh, min_track_length, plot_it=False)
+        et = edge_tracking_new.EdgeTracker(track_dict, self.t, self.x)
+        
+        pt = et.get_peaks_behind_edges(self.eta, self.vel, b_mask, N_max_dist, Nr_fact=Nr_fact, plot_it=False)
+        return pt
 
     def get_peakTracker(self, max_dist=20, high_peak_thresh=3, long_peak_thresh=300):
         return peak_tracking.get_PeakTracker(self.x, self.t, self.eta, self.vel, max_dist=max_dist, high_peak_thresh=high_peak_thresh, long_peak_thresh=long_peak_thresh)
