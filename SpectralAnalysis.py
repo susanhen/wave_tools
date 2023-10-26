@@ -830,6 +830,10 @@ class _SpectralAnalysis3d(object):
 
             i = i + 1
         return U_effs, psis
+
+    def get_disp_filtered_spec(U, h, filter_width_up, filter_width_down, filter_width_axis, first_axis_k):
+        print('Not implemented for 3d.')
+        return None    
                 
 
     def get_1d_MTF(self, ky_only):
