@@ -686,6 +686,7 @@ class PeakTracker:
         for peak_ID in self.ids_breaking_peaks:
             this_peak = self.peaks[peak_ID]
             t_inds, x_inds = this_peak.get_breaking_indices(t0=self.t[0], x0=self.x[0])
+            # TODO: remove for loop, find x_ind_stop in one go!
             for i in range(0, len(t_inds)):
                 control = True
                 x_ind_stop = x_inds[i]
@@ -693,34 +694,51 @@ class PeakTracker:
                 while control == True:
                     x_ind_start = x_inds[i] - l
                     tilt = np.arctan2(eta[t_inds[i], x_ind_start] - eta[t_inds[i], x_ind_start-1], this_peak.dx)
+                    #print('tilt: ', tilt)
                     if tilt <= 0.1:
+                        if 0:
+                            import pylab as plt
+                            plt.figure()
+                            plt.plot(self.x[:x_ind_stop], eta[t_inds[i],:x_ind_stop])
+                            plt.plot(self.x[x_ind_stop], eta[t_inds[i],x_ind_stop], 'rx')
+                            plt.show()
                         control = False
                     l = l+1
+                #print('length of bla:', x_ind_start, x_ind_stop)
+                # TODO use amplitude (amp (see below) to define width of breaking region in some way, or to define layers at least
                 mask[t_inds[i], x_ind_start:x_ind_stop] = 1
                 if (x_ind_stop - x_ind_start) > 1:
                     Ninterpolate = 10
                     N_here = (x_ind_stop - x_ind_start)
                     N_here_fine = N_here * Ninterpolate
+                    print('breaking distance: ', self.x[x_ind_stop] - self.x[x_ind_start])
                     x_here_fine = np.linspace(self.x[x_ind_start], self.x[x_ind_stop], N_here_fine)
                     eta_here = eta[t_inds[i], x_ind_start:x_ind_stop]
                     amp = np.max(eta_here) - np.min(eta_here)
                     if plot_it:
                         import pylab as plt
-                        plt.figure()
-                        plt.plot(x_here_fine[::Ninterpolate], eta_here, color='darkblue', label=r'$\eta$')
+                        fig, ax = plt.subplots(figsize=(4,3))
+                        ax.plot(x_here_fine[::Ninterpolate], eta_here, color='darkblue', label=r'$\eta$')
+                    else:
+                        ax = None
                     y0 = np.min(eta_here)
-                    tilt_basis_here = breaking_layers.accumulated_tilt_basis(x_here_fine, amp, H, y0, polarization='VV', plot_it=plot_it)
-                    tilt_basis_here = block_reduce(tilt_basis_here, (Ninterpolate,), np.max)
-                    tilt_basis[t_inds[i], x_ind_start:x_ind_stop] = tilt_basis_here
+                    tilt_basis_here = breaking_layers.accumulated_tilt_basis(x_here_fine, amp, H, y0, polarization='VV', plot_it=plot_it, ax=ax)
+                    tilt_basis_here = block_reduce(tilt_basis_here, (Ninterpolate,), np.max, )
+                    tilt_basis[t_inds[i], x_ind_start:x_ind_stop] = tilt_basis_here 
                     if plot_it:
-                        plt.plot(x_here_fine[::Ninterpolate], tilt_basis_here, 'g--', label=r'tilt-basis')
-                        plt.legend()
+                        ax2 = ax.twinx()
+                        dx = 0.2
+                        ax2.plot(x_here_fine[::Ninterpolate], ((tilt_basis_here)), 'r--')#, label=r'additional backscatter amplitude')
+                        ax.set_ylabel(r'$\eta$ (blue) and breaking layers [m]')
+                        ax.set_xlabel(r'$r$ [m]')
+                        ax2.set_ylabel(r'additional backscatter amplitude (unscaled)', color='r')
+                        #plt.legend()
                         #plt.savefig('layers.pdf', bbox_inches='tight')
                         plt.show()
         return tilt_basis, mask
 
 
-    def get_breaking_crest_speeds_fixed_L(self, L):
+    def get_breaking_crest_speeds_fixed_L(self, vel, L):
         '''
         This function defines the speed of the particles in areas of breaking.
         The speed is defined as the crest speed
@@ -734,7 +752,7 @@ class PeakTracker:
                             speeds  float array
                                     crest speed of the waves provided where wave breaking occurs, otherwise 0
         '''
-        speeds = np.zeros((self.Nt, self.Nx))
+        speeds = vel.copy()
         L_indices = int(L/self.dx)
         for peak_ID in self.ids_breaking_peaks:
             this_peak = self.peaks[peak_ID]
@@ -743,10 +761,10 @@ class PeakTracker:
             for i in range(0, len(t_inds)):
                 x_ind_stop = x_inds[i]
                 x_ind_start = np.max([0, x_ind_stop - L_indices])
-                speeds[t_inds[i], x_ind_start:x_ind_stop] = c[i]
+                speeds[t_inds[i], x_ind_start:x_ind_stop] = -c[i]
         return speeds
 
-    def get_breaking_crest_speeds(self, eta, vel, N_extend=10, fact=1.2):
+    def get_breaking_crest_speeds(self, eta, vel, N_extend=10, fact=1.):
         '''
         This function defines the speed of the particles.
         At breaking the speed is defined as the crest speed if there are orbital velocities greater than crest speed 
@@ -966,6 +984,7 @@ def get_PeakTracker(x, t, eta, vel, cmax=15, max_dist=30, high_peak_thresh=3, lo
                 smoothen_input      bool
                                     True: apply smoothing before running algorithm; Default: False
     '''
+    print('test0', np.mean(eta[0,:]))
     pt = PeakTracker(x, t, eta[0,:], vel[0,:], cmax=cmax, high_peak_thresh=high_peak_thresh, long_peak_thresh=long_peak_thresh)
     for i in range(1, len(t)):
         pt.track_peaks(t[i], eta[i,:], vel[i,:], max_dist=max_dist, plot_each_iteration=plot_tracking)
