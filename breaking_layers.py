@@ -11,7 +11,10 @@ def cos_loc_inc_angle(eta, x, H):
     return cos_theta_l   
 
 def up_down(start, mid, end, N):
-    return np.block([np.linspace(start,mid,N//2), np.linspace(mid,end,N//2)])
+    if np.mod(N,2)==0:
+        return np.block([np.linspace(start,mid,N//2), np.linspace(mid,end,N//2)])
+    else:
+        return np.block([np.linspace(start,mid,N//2), np.linspace(mid,end,N//2+1)])
 
 def assymmetric_sigmoid(lower_bound, upper_bound, N, factor=1):
     x = np.linspace(lower_bound, upper_bound, N)
@@ -38,7 +41,7 @@ def plunging_breaker(N, amp, y0, N_layers_max=9):
         return None
     return layers[:N_layers_max]
 
-def accumulated_tilt_basis(x, amp, H, y0=0, N_layers_max=9, breaker_type='plunging', polarization='HH', plot_it=False):
+def accumulated_tilt_basis(x, amp, H, y0=0, N_layers_max=9, breaker_type='plunging', polarization='HH', plot_it=False, ax=None):
     '''
     Calculate accumulated basis for tilt modulation of a breaking wave based on multiple layers
     Parameters:
@@ -60,6 +63,8 @@ def accumulated_tilt_basis(x, amp, H, y0=0, N_layers_max=9, breaker_type='plungi
                                     'HH' will give power of 2, VV power of 1
                         plot_it     bool    
                                     plotting every breaker with breaking layers
+                        ax          axis; default None
+                                    for plotting
     '''
     N = len(x)
     if breaker_type=='plunging':
@@ -74,14 +79,17 @@ def accumulated_tilt_basis(x, amp, H, y0=0, N_layers_max=9, breaker_type='plungi
                 label=r'$\mathrm{layers}~1-$'+'{0:d}'.format(N_layers_max)
             else:
                 label=None
-            plt.plot(x, layers[i], 'k-', linewidth=0.8, label=label)
+            ax.plot(x, layers[i], 'k-', linewidth=0.8, label=label)
         
         if polarization == 'VV':
             cos_theta_l = cos_loc_inc_angle(layers[i], x, H)
             theta_l = np.arccos(cos_theta_l)
-            a_added += 1./len(layers) * (1+np.sin(theta_l)**2)*cos_theta_l 
+            addition = 2./len(layers) * (1+np.sin(theta_l)**2)*cos_theta_l 
+            addition = np.where(addition>0, addition, 0)
         else:
-            a_added += 1./len(layers) * cos_loc_inc_angle(layers[i], x, H)**2
+            addition = 2./len(layers) * cos_loc_inc_angle(layers[i], x, H)**2
+            addition = np.where(addition>0, addition, 0)
+        a_added += addition
 
         
     return a_added
