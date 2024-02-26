@@ -1435,5 +1435,16 @@ class spacetempSurface(object):
         pt = et.get_peaks_behind_edges(self.eta, self.vel, b_mask, N_max_dist, Nr_fact=Nr_fact, plot_it=False)
         return pt
 
+    def get_peakTracker_fromEdges(self, H, polarization, N_max_dist=3, sigma=1, 
+                              low_thresh=1, high_thresh=20, min_track_length=50, Nr_fact=1):
+        track_dict = edge_tracking_new.main(self.eta, False, '', 0, sigma, low_thresh, high_thresh, min_track_length, plot_it=False)
+        et = edge_tracking_new.EdgeTracker(track_dict, self.t, self.x)
+        
+        pt = et.get_peaks_and_breaking_behind_edges(self.eta, self.vel, H, polarization, N_max_dist, Nr_fact=Nr_fact, plot_it=False)
+        return pt
+
     def get_peakTracker(self, max_dist=20, high_peak_thresh=3, long_peak_thresh=300):
         return peak_tracking.get_PeakTracker(self.x, self.t, self.eta, self.vel, max_dist=max_dist, high_peak_thresh=high_peak_thresh, long_peak_thresh=long_peak_thresh)
+    
+    def get_velPeakTracker(self, max_dist=20, high_peak_thresh=3, long_peak_thresh=300):
+        return peak_tracking.get_PeakTracker(self.x, self.t, self.vel, self.vel, max_dist=max_dist, high_peak_thresh=high_peak_thresh, long_peak_thresh=long_peak_thresh)
