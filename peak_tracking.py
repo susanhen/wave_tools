@@ -722,7 +722,7 @@ class PeakTracker:
                     else:
                         ax = None
                     y0 = np.min(eta_here)
-                    tilt_basis_here = breaking_layers.accumulated_tilt_basis(x_here_fine, amp, H, y0, polarization='VV', plot_it=plot_it, ax=ax)
+                    tilt_basis_here = breaking_layers.accumulated_tilt_basis(x_here_fine, amp, H, y0, polarization=polarization, plot_it=plot_it, ax=ax)
                     tilt_basis_here = block_reduce(tilt_basis_here, (Ninterpolate,), np.max, )
                     tilt_basis[t_inds[i], x_ind_start:x_ind_stop] = tilt_basis_here 
                     if plot_it:

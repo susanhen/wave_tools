@@ -70,7 +70,7 @@ def accumulated_tilt_basis(x, amp, H, y0=0, N_layers_max=9, breaker_type='plungi
     if breaker_type=='plunging':
         layers = plunging_breaker(N, amp, y0, N_layers_max)
     else:
-        print('not decided')
+        print('not implemented')
         return None
     a_added = np.zeros(N)
     for i in range(0, len(layers)):
